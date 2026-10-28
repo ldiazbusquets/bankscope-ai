@@ -1,250 +1,492 @@
-/* BankScope GitHub Pages v0.2: Python precomputed bank datasets, JS scenario engine. */
+/* BankScope AI front end. Data is precomputed in Python (bankcore/) by GitHub Actions;
+   the browser only formats it and recalculates interactive stress scenarios. */
+'use strict';
+
 const $ = (id) => document.getElementById(id);
-let report = null;
-let brief = null;
-let aiText = '';
-let selectedTab = 'overview';
-let manifest = {banks:[{cert:999999,name:'Northstar Regional Bank (FICTIONAL)',mode:'demo'}],warnings:[]};
+const DEMO_CERT = 999999;
+const VIEWS = ['overview', 'stress', 'research', 'method'];
 
-const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (x) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
-const fmtPercent = (n, d=2) => n == null || !Number.isFinite(Number(n)) ? 'N/A' : `${Number(n).toFixed(d)}%`;
-const fmtMoney = (n) => {
-  if (n == null || !Number.isFinite(Number(n))) return 'N/A';
-  const value = Number(n);
-  if (Math.abs(value) >= 1_000_000) return `${value < 0 ? '−' : ''}$${Math.abs(value / 1_000_000).toFixed(2)}B`;
-  if (Math.abs(value) >= 1_000) return `${value < 0 ? '−' : ''}$${Math.abs(value / 1_000).toFixed(2)}M`;
-  return `${value < 0 ? '−' : ''}$${Math.abs(value).toFixed(1)}K`;
+const state = {
+  manifest: { banks: [{ cert: DEMO_CERT, name: 'Northstar Regional Bank (FICTIONAL)', mode: 'demo' }], warnings: [] },
+  report: null,
+  brief: null,
+  aiText: '',
+  view: 'overview',
+  load: 0,
 };
-const value = (id, content) => { $(id).textContent = content; };
 
+/* ---------- formatting ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isNum = (n) => n !== null && n !== undefined && n !== '' && Number.isFinite(Number(n));
+const MINUS = '−';
+
+/** FDIC dollar amounts are reported in USD thousands. */
+function fmtMoney(thousands) {
+  if (!isNum(thousands)) return 'Not reported';
+  const dollars = Number(thousands) * 1000;
+  const sign = dollars < 0 ? MINUS : '';
+  const a = Math.abs(dollars);
+  if (a >= 1e12) return `${sign}$${(a / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(a >= 1e11 ? 0 : 1)}B`;
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(0)}K`;
+  return `${sign}$${a.toFixed(0)}`;
+}
+function fmtPct(n, d = 2) {
+  if (!isNum(n)) return 'Not reported';
+  const v = Number(n);
+  return `${v < 0 ? MINUS : ''}${Math.abs(v).toFixed(d)}%`;
+}
+function fmtDate(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso || 'Unknown';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+function fmtQuarter(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `Q${Math.floor(d.getUTCMonth() / 3) + 1} ${String(d.getUTCFullYear()).slice(2)}`;
+}
+function fmtBuildTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+}
+const setText = (id, text) => { $(id).textContent = text; };
+
+/* ---------- data ---------- */
 async function getJSON(path) {
-  const r = await fetch(path, {cache:'no-store'});
-  let body;
-  try { body = await r.json(); } catch { throw Error(`Invalid JSON response from ${path}`); }
-  if (!r.ok) throw Error(`Dataset not available (HTTP ${r.status})`);
-  return body;
+  const r = await fetch(path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status} for ${path}`);
+  try { return await r.json(); } catch { throw new Error(`${path} is not valid JSON`); }
 }
-function busy(flag) { $('loading').hidden = !flag; }
-function error(message) { const el = $('error'); el.textContent = message || ''; el.hidden = !message; }
-
-function navigate(tab) {
-  selectedTab = tab;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
-  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === `view-${tab}`));
-  value('current-route', {overview:'OVERVIEW', stress:'STRESS LAB', research:'RESEARCH AGENT', method:'METHODOLOGY'}[tab] || tab.toUpperCase());
+/** Readable name: build-supplied display name, else a title-cased FDIC legal name. */
+function displayName(inst) {
+  if (inst?.display_name) return inst.display_name;
+  const small = new Set(['of', 'and', 'the', 'for']);
+  return String(inst?.name || 'Unknown institution').toLowerCase().split(/\s+/).map((w, i) => {
+    if (w === 'na' || w === 'n.a.') return 'N.A.';
+    if (i > 0 && small.has(w)) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ').replace(/ N\.A\.$/, ', N.A.');
 }
-document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.tab)));
+const isDemo = () => state.report?.data_mode === 'demo';
+const bankListed = (cert) => state.manifest.banks.some((b) => Number(b.cert) === Number(cert));
 
-function chartSVG(records) {
-  const items = (records || []).slice(-8).filter(r => r.assets != null && r.deposits != null);
-  if (!items.length) return '<p style="color:#879bb0">Historical data unavailable</p>';
-  const w = 650, h = 295, left = 48, right = 17, top = 20, bottom = 40;
-  const vw = w - left - right, vh = h - top - bottom;
-  const all = items.flatMap(d => [d.assets, d.deposits]);
-  const min = Math.floor(Math.min(...all) / 5_000_000) * 5_000_000;
-  const max = Math.ceil(Math.max(...all) / 5_000_000) * 5_000_000;
-  const spread = Math.max(1, max - min);
-  const x = (i) => left + (items.length === 1 ? vw / 2 : (i / (items.length - 1)) * vw);
-  const y = (v) => top + (1 - (v - min) / spread) * vh;
-  const line = (key) => items.map((d,i) => `${i?'L':'M'} ${x(i).toFixed(1)} ${y(d[key]).toFixed(1)}`).join(' ');
-  const area = (key) => `${line(key)} L ${x(items.length - 1).toFixed(1)} ${top + vh} L ${x(0).toFixed(1)} ${top + vh} Z`;
-  const grid = Array.from({length:5}, (_,i) => {
-    const val = min + spread * i/4;
-    const yy = y(val).toFixed(1);
-    return `<line x1="${left}" y1="${yy}" x2="${w-right}" y2="${yy}" stroke="#27394d" stroke-dasharray="3 5"/><text x="${left-10}" y="${Number(yy)+3}" text-anchor="end" fill="#69829c" font-size="11">${(val/1e6).toFixed(0)}B</text>`;
-  }).join('');
-  const tick = items.map((r,i) => {
-    const d = new Date(r.date + 'T00:00:00Z');
-    const date = Number.isNaN(d.getTime()) ? r.date : `Q${Math.floor(d.getUTCMonth()/3)+1} '${String(d.getUTCFullYear()).slice(2)}`;
-    return `<text x="${x(i)}" y="${h-12}" text-anchor="middle" font-size="11" fill="#7f95ab">${escapeHtml(date)}</text>`;
-  }).join('');
-  const dots = (key,color) => items.map((row,i) => `<circle cx="${x(i)}" cy="${y(row[key])}" r="3.6" fill="${color}" stroke="#0e1928" stroke-width="2"><title>${escapeHtml(row.date)}: ${fmtMoney(row[key])}</title></circle>`).join('');
-  return `<svg role="img" aria-label="Last ${items.length} quarters of assets and deposits, in billions of dollars" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="assetShade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#478fc7" stop-opacity=".23"/><stop offset="1" stop-color="#478fc7" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area('assets')}" fill="url(#assetShade)"/><path d="${line('assets')}" fill="none" stroke="#76b9f0" stroke-width="2.8" stroke-linejoin="round"/><path d="${line('deposits')}" fill="none" stroke="#6dacae" stroke-width="2.4" stroke-linejoin="round"/>${dots('assets','#76b9f0')}${dots('deposits','#6dacae')}${tick}</svg>`;
+/* ---------- routing (#bank=628&view=stress) ---------- */
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  return { bank: Number(p.get('bank')) || null, view: VIEWS.includes(p.get('view')) ? p.get('view') : null };
+}
+function writeHash() {
+  if (!state.report) return;
+  const p = new URLSearchParams({ bank: String(state.report.institution.cert), view: state.view });
+  history.replaceState(null, '', `#${p}`);
 }
 
-const indicators = [
- ['risk_based_capital_pct','Total risk-based capital ratio','FDIC-reported ratio (not derived)'],
- ['loans_deposits_pct','Loans / deposits','Gross loans ÷ total deposits'],
- ['cash_deposits_pct','Cash / deposits','Cash and balances ÷ total deposits'],
- ['uninsured_domestic_pct','Uninsured domestic deposits','Estimated uninsured ÷ domestic deposits'],
- ['roa_pct','Return on assets','FDIC-reported annualized ratio'],
- ['roe_pct','Return on equity','FDIC-reported annualized ratio'],
- ['nim_pct','Net interest margin','FDIC-reported annualized ratio'],
- ['noncurrent_loans_pct','Noncurrent loans','FDIC-reported loan delinquency measure'],
- ['equity_assets_pct','Equity / assets','Accounting equity ÷ total assets'],
-];
-
-function renderOverview() {
-  const l = report.latest, m = report.metrics;
-  value('kpi-assets', fmtMoney(l.assets));
-  value('kpi-deposits', fmtMoney(l.deposits));
-  value('kpi-capital', fmtPercent(m.equity_assets_pct));
-  value('kpi-npl', fmtPercent(m.noncurrent_loans_pct));
-  $('history-chart').innerHTML = chartSVG(report.history);
-  value('chart-source', report.data_mode === 'demo' ? 'FABRICATED DEMO DATA' : 'FDIC BANKFIND SUITE · QUARTERLY DATA');
-  const flagged = report.signals.filter(s => s.flag).length;
-  value('watch-count', `${flagged} / ${report.signals.length} FLAGS`);
-  $('signal-list').innerHTML = report.signals.length ? report.signals.map(s => `<div class="signal ${s.flag?'flag':''}"><span class="signal-icon">${s.flag?'!':'✓'}</span><span class="signal-name">${escapeHtml(s.label)}</span><span class="signal-tag">${s.flag?'WATCH':'PASS'}</span></div>`).join('') : '<p class="panel-explainer">No available monitoring metrics.</p>';
-  $('ratio-grid').innerHTML = indicators.map(([key,label,detail]) => `<div class="ratio"><div class="ratio-label">${escapeHtml(label)}</div><div class="ratio-value">${fmtPercent(m[key])}</div><div class="ratio-detail">${escapeHtml(detail)}</div></div>`).join('');
+/* ---------- tabs ---------- */
+const tabs = () => [...document.querySelectorAll('[role="tab"]')];
+function showView(view, { focus = false } = {}) {
+  state.view = view;
+  for (const t of tabs()) {
+    const on = t.dataset.view === view;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+    if (on && focus) t.focus();
+  }
+  for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
+  if (view === 'overview' && state.report) renderChart();
+  writeHash();
 }
-function renderStress(s) {
+for (const t of tabs()) t.addEventListener('click', () => showView(t.dataset.view));
+$('tablist').addEventListener('keydown', (e) => {
+  const list = tabs();
+  const i = list.findIndex((t) => t.dataset.view === state.view);
+  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: list.length - 1 }[e.key];
+  if (next === undefined) return;
+  e.preventDefault();
+  showView(list[(next + list.length) % list.length].dataset.view, { focus: true });
+});
+
+/* ---------- overview ---------- */
+function quarterChange(key) {
+  const h = state.report.history;
+  if (h.length < 2) return null;
+  const cur = h[h.length - 1][key], prev = h[h.length - 2][key];
+  if (!isNum(cur) || !isNum(prev) || Number(prev) === 0) return null;
+  return (Number(cur) / Number(prev) - 1) * 100;
+}
+function deltaHTML(pct) {
+  if (pct === null) return '<span class="reading-note">No prior quarter</span>';
+  const cls = Math.abs(pct) < 0.05 ? 'flat' : pct > 0 ? 'up' : 'down';
+  const sign = pct > 0 ? '+' : pct < 0 ? MINUS : '';
+  return `<span class="delta ${cls}">${sign}${Math.abs(pct).toFixed(1)}%</span> <span class="reading-note">vs prior quarter</span>`;
+}
+function renderReadings() {
+  const l = state.report.latest, m = state.report.metrics;
   const items = [
-    ['ASSUMED DEPOSIT OUTFLOW',fmtMoney(s.assumed_deposit_outflow),'Uninsured domestic deposit shock'],
-    ['CASH AFTER OUTFLOW',fmtMoney(s.cash_after_outflow),'Cash-only model; excludes securities'],
-    ['CASH-ONLY FUNDING GAP',fmtMoney(s.cash_only_funding_gap),'Not a total liquidity shortfall'],
-    ['MODELED CREDIT LOSS',fmtMoney(s.credit_loss),'Gross loans × assumed loss rate'],
-    ['EQUITY / ASSETS · BEFORE',fmtPercent(s.equity_assets_before_pct),'Accounting ratio'],
-    ['EQUITY / ASSETS · AFTER',fmtPercent(s.equity_assets_after_pct),'Simplified post-loss ratio'],
+    ['Total assets', fmtMoney(l.assets), deltaHTML(quarterChange('assets'))],
+    ['Total deposits', fmtMoney(l.deposits), deltaHTML(quarterChange('deposits'))],
+    ['Equity / assets', fmtPct(m.equity_assets_pct), '<span class="reading-note">Accounting capital</span>'],
+    ['Total risk-based capital', fmtPct(m.risk_based_capital_pct), '<span class="reading-note">Regulatory, as reported</span>'],
+    ['Noncurrent loans', fmtPct(m.noncurrent_loans_pct), '<span class="reading-note">Share of gross loans</span>'],
   ];
-  $('stress-results').innerHTML = items.map(([label,val,help],i) => `<div class="stress-stat"><small>${escapeHtml(label)}</small><strong class="${(i===1&&s.cash_after_outflow<0)||(i===5&&s.equity_assets_after_pct<0)?'negative':''}">${escapeHtml(val)}</strong><em>${escapeHtml(help)}</em></div>`).join('');
-}
-function renderBrief(b) {
-  if (!b) return;
-  const flags = b.monitoring_flags.length
-    ? `<ul>${b.monitoring_flags.map(s => `<li class="flag-list">${escapeHtml(s)}</li>`).join('')}</ul>`
-    : '<p>No educational thresholds triggered among available fields.</p>';
-  $('rules-report').innerHTML = `<p class="report-subtitle">${escapeHtml(b.subtitle)}</p><ul>${b.points.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul><h4>Monitoring flags</h4>${flags}<h4>Research interpretation</h4><p>${escapeHtml(b.interpretation)}</p><h4>Limitations</h4><p>${escapeHtml(b.limitations)}</p>`;
+  $('readings').innerHTML = items.map(([label, val, note]) =>
+    `<div class="reading"><div class="reading-label">${esc(label)}</div><div class="reading-value">${esc(val)}</div><div>${note}</div></div>`).join('');
 }
 
+function niceStep(max) {
+  const raw = max / 5;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+}
+function axisMoney(thousands) {
+  const d = thousands * 1000;
+  if (d === 0) return '$0';
+  if (d >= 1e12) return `$${+(d / 1e12).toFixed(1)}T`;
+  if (d >= 1e9) return `$${+(d / 1e9).toFixed(0)}B`;
+  return `$${+(d / 1e6).toFixed(0)}M`;
+}
+function renderChart() {
+  const items = state.report.history.slice(-8).filter((r) => isNum(r.assets) && isNum(r.deposits));
+  if (items.length < 2) { $('history-chart').innerHTML = '<p class="empty">Not enough reported quarters to draw a trend.</p>'; return; }
+  const W = Math.max(300, Math.round($('history-chart').clientWidth || 640)), H = W < 480 ? 230 : 280, L = 48, R = 62, T = 12, B = 30;
+  const vw = W - L - R, vh = H - T - B;
+  const step = niceStep(Math.max(...items.map((d) => Number(d.assets))));
+  const max = Math.ceil(Math.max(...items.map((d) => Number(d.assets))) / step) * step;
+  const x = (i) => L + (i / (items.length - 1)) * vw;
+  const y = (v) => T + (1 - v / max) * vh;
+  const path = (k) => items.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(Number(d[k])).toFixed(1)}`).join(' ');
+  let grid = '';
+  for (let v = 0; v <= max + 1e-6; v += step) {
+    const yy = y(v).toFixed(1);
+    grid += `<line class="grid-line" x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" ${v === 0 ? '' : 'stroke-dasharray="2 4"'}/>`;
+    grid += `<text class="axis-text" x="${L - 10}" y="${+yy + 4}" text-anchor="end">${axisMoney(v)}</text>`;
+  }
+  const skip = W < 480 ? 2 : 1;
+  const ticks = items.map((d, i) => (items.length - 1 - i) % skip ? '' : `<text class="axis-text" x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(fmtQuarter(d.date))}</text>`).join('');
+  const dots = (k, cls) => items.map((d, i) => `<circle class="${cls}" cx="${x(i).toFixed(1)}" cy="${y(Number(d[k])).toFixed(1)}" r="3.5" stroke-width="2"><title>${esc(fmtDate(d.date))}: ${esc(fmtMoney(d[k]))}</title></circle>`).join('');
+  const last = items[items.length - 1];
+  const endA = y(Number(last.assets)), endD = y(Number(last.deposits));
+  const gap = 16, ea = Math.min(endA, endD - gap), ed = Math.max(endD, endA + gap);
+  $('history-chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Total assets and total deposits for the last ${items.length} quarters. Latest: assets ${esc(fmtMoney(last.assets))}, deposits ${esc(fmtMoney(last.deposits))}.">
+    <defs><linearGradient id="fillAssets" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa9e6" stop-opacity=".18"/><stop offset="1" stop-color="#5aa9e6" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
+    <path d="${path('assets')} L${x(items.length - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z" fill="url(#fillAssets)"/>
+    <path class="series-assets" d="${path('assets')}" fill="none" stroke-width="2.25" stroke-linejoin="round"/>
+    <path class="series-deposits" d="${path('deposits')}" fill="none" stroke-width="2.25" stroke-linejoin="round"/>
+    ${dots('assets', 'dot-assets')}${dots('deposits', 'dot-deposits')}
+    <text class="end-label" x="${W - R + 10}" y="${ea + 4}" fill="#5aa9e6">${esc(fmtMoney(last.assets))}</text>
+    <text class="end-label" x="${W - R + 10}" y="${ed + 4}" fill="#8fb7cc">${esc(fmtMoney(last.deposits))}</text>
+    ${ticks}</svg>`;
+  const h = state.report.history, cur = h[h.length - 1], ago = h.length >= 5 ? h[h.length - 5] : null;
+  const yoy = (k) => (ago && isNum(cur[k]) && isNum(ago[k]) && Number(ago[k]) !== 0 ? (Number(cur[k]) / Number(ago[k]) - 1) * 100 : null);
+  const chg = (p) => (p === null ? '<span class="muted">n/a</span>' : `<span class="delta ${Math.abs(p) < 0.05 ? 'flat' : p > 0 ? 'up' : 'down'}">${p > 0 ? '+' : p < 0 ? MINUS : ''}${Math.abs(p).toFixed(1)}%</span>`);
+  $('yoy-table').innerHTML = `<thead><tr><th scope="col">Balance</th><th scope="col">${esc(fmtQuarter(cur.date))}</th><th scope="col">${ago ? esc(fmtQuarter(ago.date)) : 'Year ago'}</th><th scope="col">Change</th></tr></thead><tbody>${
+    [['Total assets', 'assets'], ['Total deposits', 'deposits'], ['Gross loans', 'loans'], ['Equity capital', 'equity'], ['Cash and balances', 'cash']].map(([n, k]) =>
+      `<tr><th scope="row">${n}</th><td>${esc(fmtMoney(cur[k]))}</td><td>${ago ? esc(fmtMoney(ago[k])) : 'n/a'}</td><td>${chg(yoy(k))}</td></tr>`).join('')}</tbody>`;
+  setText('chart-foot', isDemo()
+    ? 'Fictional figures. Axis starts at zero so changes are shown at true scale.'
+    : 'Source: FDIC BankFind quarterly financials. Axis starts at zero so changes are shown at true scale.');
+}
 
-const ratio = (a,b) => Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? (a / b) * 100 : null;
+/* Display scale for each screening gauge (percent). Thresholds come from the Python report. */
+const GAUGE = {
+  equity_assets_pct: { name: 'Equity / assets', max: 16, unit: 'floor' },
+  uninsured_domestic_pct: { name: 'Uninsured share of domestic deposits', max: 100, unit: 'ceiling' },
+  cash_deposits_pct: { name: 'Cash / deposits', max: 30, unit: 'floor' },
+  loans_deposits_pct: { name: 'Loans / deposits', max: 140, unit: 'ceiling' },
+  noncurrent_loans_pct: { name: 'Noncurrent loans', max: 5, unit: 'ceiling' },
+};
+function renderChecks() {
+  const signals = state.report.signals || [];
+  const watch = signals.filter((s) => s.flag).length;
+  const count = $('check-count');
+  count.textContent = signals.length ? `${watch} of ${signals.length} on watch` : 'No data';
+  count.classList.toggle('has-watch', watch > 0);
+  if (!signals.length) { $('checks').innerHTML = '<p class="empty">None of the screened fields were reported for this quarter.</p>'; return; }
+  $('checks').innerHTML = signals.map((s) => {
+    const g = GAUGE[s.metric] || { name: s.label, max: Math.max(s.threshold * 2, s.value * 1.2), unit: 'ceiling' };
+    const max = Math.max(g.max, s.value * 1.05, s.threshold * 1.1);
+    const pos = (v) => Math.min(100, Math.max(0, (v / max) * 100));
+    const below = g.unit === 'floor';
+    const t = pos(s.threshold);
+    const zone = below
+      ? `<span class="gauge-zone left" style="width:${t}%"></span>`
+      : `<span class="gauge-zone right" style="width:${100 - t}%"></span>`;
+    const margin = Math.abs(s.value - s.threshold);
+    const rel = below
+      ? (s.flag ? `${margin.toFixed(2)} pts below the ${s.threshold}% floor` : `${margin.toFixed(2)} pts above the ${s.threshold}% floor`)
+      : (s.flag ? `${margin.toFixed(2)} pts above the ${s.threshold}% ceiling` : `${margin.toFixed(2)} pts under the ${s.threshold}% ceiling`);
+    return `<div class="check ${s.flag ? 'watch' : ''}">
+      <div class="check-top"><span class="check-name">${esc(g.name)}</span><span class="check-value">${fmtPct(s.value)}</span></div>
+      <div class="gauge" role="img" aria-label="${esc(g.name)} ${fmtPct(s.value)}; ${esc(rel)}">${zone}<span class="gauge-threshold" style="left:calc(${t}% - 1px)"></span><span class="gauge-mark" style="left:${pos(s.value)}%"></span></div>
+      <div class="check-meta"><span>${esc(rel)}</span><span class="check-status">${s.flag ? 'Watch' : 'Within range'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+const INDICATORS = [
+  ['Capital', [
+    ['risk_based_capital_pct', 'Total risk-based capital ratio', 'Prompt Corrective Action measure', 'reported'],
+    ['equity_assets_pct', 'Equity / assets', 'Equity capital ÷ total assets', 'derived'],
+  ]],
+  ['Liquidity and funding', [
+    ['cash_deposits_pct', 'Cash / deposits', 'Cash and due from banks ÷ total deposits', 'derived'],
+    ['loans_deposits_pct', 'Loans / deposits', 'Gross loans and leases ÷ total deposits', 'derived'],
+    ['uninsured_domestic_pct', 'Uninsured domestic deposits', 'Estimated uninsured ÷ domestic deposits', 'derived'],
+  ]],
+  ['Asset quality', [
+    ['noncurrent_loans_pct', 'Noncurrent loans', '90+ days past due or nonaccrual ÷ gross loans', 'reported'],
+  ]],
+  ['Earnings', [
+    ['roa_pct', 'Return on assets', 'Annualized year-to-date net income ÷ average assets', 'reported'],
+    ['roe_pct', 'Return on equity', 'Annualized year-to-date net income ÷ average equity', 'reported'],
+    ['nim_pct', 'Net interest margin', 'Annualized year-to-date', 'reported'],
+  ]],
+];
+function renderIndicators() {
+  const m = state.report.metrics;
+  $('indicator-table').innerHTML = INDICATORS.map(([group, rows]) => `<section class="group"><h3>${esc(group)}</h3>${rows.map(([k, name, def, origin]) =>
+    `<div class="ind"><span class="ind-name">${esc(name)}</span><span class="ind-value">${fmtPct(m[k])}</span><span class="ind-def">${esc(def)}</span><span class="ind-origin ${origin}">${origin === 'derived' ? 'Derived' : 'FDIC reported'}</span></div>`).join('')}</section>`).join('');
+}
+
+/* ---------- stress test ---------- */
+const ratio = (a, b) => (isNum(a) && isNum(b) && Number(b) !== 0 ? (Number(a) / Number(b)) * 100 : null);
+/** Mirrors bankcore/analytics.py::stress_test exactly. Inputs in USD thousands. */
 function scenario(rec, runoff, lossPct) {
-  // Mirror bankcore/analytics.py::stress_test. FDIC balance sheet units: USD thousands.
-  const num = v => v === null || v === undefined || v === '' ? null : Number(v);
-  const u = num(rec.uninsured_deposits), cash = num(rec.cash), loans = num(rec.loans);
-  const equity = num(rec.equity), assets = num(rec.assets);
-  const outflow = u === null ? null : u * runoff / 100;
+  const n = (v) => (isNum(v) ? Number(v) : null);
+  const u = n(rec.uninsured_deposits), cash = n(rec.cash), loans = n(rec.loans), equity = n(rec.equity), assets = n(rec.assets);
+  const outflow = u === null ? null : (u * runoff) / 100;
   const remaining = cash === null || outflow === null ? null : cash - outflow;
-  const credit = loans === null ? null : loans * lossPct / 100;
+  const credit = loans === null ? null : (loans * lossPct) / 100;
   const newEquity = equity === null || credit === null ? null : equity - credit;
   const newAssets = assets === null || credit === null ? null : assets - credit;
   return {
     assumed_deposit_outflow: outflow,
     cash_after_outflow: remaining,
-    cash_only_funding_gap: remaining === null ? null : Math.max(0,-remaining),
+    cash_only_funding_gap: remaining === null ? null : Math.max(0, -remaining),
     credit_loss: credit,
-    equity_assets_before_pct: equity === null || assets === null ? null : ratio(equity,assets),
-    equity_assets_after_pct: newEquity === null || newAssets === null ? null : ratio(newEquity,newAssets)
+    equity_after_credit_loss: newEquity,
+    equity_assets_before_pct: ratio(equity, assets),
+    equity_assets_after_pct: newEquity === null || newAssets === null ? null : ratio(newEquity, newAssets),
   };
 }
-let currentLoad = 0;
-async function loadBank(cert) {
-  if (!manifest.banks.some(b=>Number(b.cert)===Number(cert))) {
-    return error('That bank is not in this published dataset. Try a listed bank or the demo.');
-  }
-  const request = ++currentLoad;
-  error(''); busy(true); $('search-results').hidden = true;
-  try {
-    let data;
-    if (Number(cert)===999999 && window.BANKSCOPE_DEMO) data = window.BANKSCOPE_DEMO;
-    else data = await getJSON(`./data/bank_${Number(cert)}.json`);
-    if (request !== currentLoad) return;
-    if (!data || !data.report || !data.brief) throw Error('Malformed bank data');
-    report = data.report;
-    brief = data.brief;
-    aiText = '';
-    value('bank-name', report.institution.name);
-    value('period-label', `REPORTING · ${report.as_of}`);
-    value('cert-label', `FDIC CERT · ${report.institution.cert}${report.data_mode==='demo'?' (FICTIONAL)':''}`);
-    const demo = report.data_mode==='demo';
-    $('data-badge').textContent = demo ? 'ILLUSTRATIVE' : 'FDIC QUARTERLY SOURCE';
-    $('data-badge').className = `data-badge ${demo?'demo':''}`;
-    $('notice').className = `notice ${demo?'demo-notice':'live-notice'}`;
-    $('notice').innerHTML = demo
-      ? '<strong>ILLUSTRATIVE DATA</strong><span>Fictional bank and invented financials. No real institution is represented.</span>'
-      : `<strong>PUBLIC FDIC DATA</strong><span>Quarter ended ${escapeHtml(report.as_of)}. Compiled at build time; not a live API response or an official risk rating.</span>`;
-    renderOverview(); renderBrief(brief);
-    $('runoff-slider').value = 25;
-    $('loss-slider').value = 2;
-    stressUpdated();
-    $('ai-answer').innerHTML = '<span class="tiny-heading">AI RESEARCH</span><p>Checking for a pre-generated AI report…</p>';
-    if (demo) {
-      $('ai-answer').innerHTML = '<span class="tiny-heading">DEMO MODE</span><p>No AI-generated assessment for fictional demo data. Select a published real bank and enable AI in the GitHub workflow.</p>';
-    } else {
-      try {
-        const ai = await getJSON(`./data/ai_${Number(cert)}.json`);
-        if (request !== currentLoad) return;
-        if (ai.bank_as_of!==report.as_of || !ai.is_ai_generated) throw Error('AI output did not match current evidence');
-        aiText = ai.answer;
-        $('ai-answer').innerHTML = `<span class="tiny-heading">AI-GENERATED · ${escapeHtml(ai.model)} · ${escapeHtml(ai.generated_at_utc)}</span><pre></pre><p class="tiny-caveat">AI commentary is not independently verified. Cross-check the FDIC-sourced metrics.</p>`;
-        $('ai-answer').querySelector('pre').textContent = ai.answer;
-      } catch {
-        if (request !== currentLoad) return;
-        $('ai-answer').innerHTML = '<span class="tiny-heading">AI NOT YET ENABLED</span><p>No model-generated commentary was published for this bank. The deterministic brief at left is fully functional. To add AI, configure the GitHub secret and rerun Publish BankScope.</p>';
-      }
-    }
-  } catch(e) {
-    if (request===currentLoad) error(`Unable to open bank data: ${e.message}. Select the fictional demo or rerun the workflow.`);
-  } finally {
-    if (request===currentLoad) busy(false);
-  }
+const currentScenario = () => scenario(state.report.latest, Number($('runoff-slider').value), Number($('loss-slider').value));
+
+function bar(label, thousands, scale, cls) {
+  const w = isNum(thousands) && scale > 0 ? Math.max(0, Math.min(100, (Number(thousands) / scale) * 100)) : 0;
+  return `<div class="bar-row"><span class="bar-label">${esc(label)}</span><span class="bar-track"><span class="bar-fill ${cls}" style="width:${w}%"></span></span><span class="bar-value">${esc(fmtMoney(thousands))}</span></div>`;
 }
-function stressUpdated() {
-  if (!report) return;
+function renderStress() {
+  if (!state.report) return;
   const runoff = Number($('runoff-slider').value), loss = Number($('loss-slider').value);
-  value('runoff-label', `${runoff}%`); value('loss-label', `${loss.toFixed(2)}%`);
-  document.querySelectorAll('.scenario-presets button').forEach(b => b.classList.toggle('active', Number(b.dataset.runoff)===runoff && Number(b.dataset.loss)===loss));
-  renderStress(scenario(report.latest,runoff,loss));
-  value('scenario-status','BROWSER CALCULATION');
-}
-for (const id of ['runoff-slider','loss-slider']) $(id).addEventListener('input', stressUpdated);
-document.querySelectorAll('.scenario-presets button').forEach(b => b.addEventListener('click', () => {
-  $('runoff-slider').value=b.dataset.runoff;
-  $('loss-slider').value=b.dataset.loss;
-  stressUpdated();
-}));
-document.querySelectorAll('.preset').forEach(btn => btn.addEventListener('click', () => loadBank(Number(btn.dataset.cert))));
-$('search-form').addEventListener('submit', (ev) => {
-  ev.preventDefault();error('');
-  const q = $('bank-query').value.trim().toLowerCase();
-  if (!q) return error('Enter a bank name or FDIC certificate.');
-  const matches = manifest.banks.filter(b=>b.name.toLowerCase().includes(q) || String(b.cert)===q);
-  const results = $('search-results');
-  if (!matches.length) results.innerHTML = '<p>No matches in the current published bank list. This is not an unrestricted FDIC search.</p>';
-  else results.innerHTML = matches.map(b=>`<button type="button" data-id="${Number(b.cert)}"><span>${escapeHtml(b.name)}</span><small>${b.mode==='demo'?'FICTIONAL DEMO':`FDIC ${Number(b.cert)} · ${escapeHtml(b.as_of || '')}`}</small></button>`).join('');
-  results.hidden = false;
-  results.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>loadBank(Number(btn.dataset.id))));
-});
-$('export-button').addEventListener('click',()=>{
-  if (!report || !brief) return;
-  const lines = [
-    `# BankScope AI — ${report.institution.name}`, '',
-    report.data_mode==='demo'?'**FICTIONAL DATA — NOT A REAL BANK**':'Source: FDIC BankFind Suite, bank-charter-level quarterly financial data',
-    `Reported period: ${report.as_of}`,
-    `Certificate: ${report.institution.cert}`,
-    '', '## Financial snapshot',
-    `- Total assets: ${fmtMoney(report.latest.assets)}`,
-    `- Total deposits: ${fmtMoney(report.latest.deposits)}`,
-    `- Equity / assets: ${fmtPercent(report.metrics.equity_assets_pct)}`,
-    `- Noncurrent loans: ${fmtPercent(report.metrics.noncurrent_loans_pct)}`,
-    '', '## Deterministic evidence brief', ...brief.points.map(s=>`- ${s}`),
-    '', '## Monitoring flags', ...(brief.monitoring_flags.length?brief.monitoring_flags.map(s=>`- ${s}`):['- None of the available rule thresholds triggered']),
-    '', brief.interpretation, '', '## Limitations', brief.limitations,
-    '', '## Current hypothetical stress scenario',
-    `- Uninsured deposit runoff: ${$('runoff-slider').value}%`,
-    `- Gross loan credit loss: ${$('loss-slider').value}%`,
-    `- Cash-only funding gap: ${fmtMoney(scenario(report.latest,+$('runoff-slider').value,+$('loss-slider').value).cash_only_funding_gap)}`,
-    '', ...(aiText ? ['## Optional AI-generated research note', aiText, 'Model output may contain errors. Verify all statements.'] : []),
-    '', 'FDIC reference: https://api.fdic.gov/banks/docs',
-    'Class project only; not regulatory advice, an official rating, or investment guidance.'
-  ];
-  const blob = new Blob([lines.join('\n')],{type:'text/markdown;charset=utf-8'});
-  const url = URL.createObjectURL(blob), a = document.createElement('a');
-  a.href=url;a.download=`bankscope_${report.institution.cert}_${report.as_of}.md`;
-  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-});
-(async function initialize(){
-  // Fail over to the transparently fictional demo when opening locally or if
-  // the generated manifest is not available. Never treat demo as real.
-  try { manifest = await getJSON('./data/manifest.json');
-    const live = manifest.banks.filter(b=>b.mode==='live').length;
-    value('api-state',live?`${live} FDIC BANKS PUBLISHED`:'DEMO-ONLY BUILD');
-    value('model-state',manifest.ai_enabled?'MODEL STATUS: PREGENERATED AI REPORTS':'MODEL STATUS: NOT CONFIGURED');
-    if (manifest.warnings.length) error(`${manifest.warnings.length} FDIC dataset(s) were unavailable during the last build. See GitHub Actions logs. Other banks and the demo remain usable.`);
-  } catch {
-    value('api-state','OFFLINE DEMO AVAILABLE');
-    value('model-state','MODEL STATUS: NOT CONFIGURED');
+  setText('runoff-label', `${runoff}%`);
+  setText('loss-label', `${loss.toFixed(2)}%`);
+  for (const el of ['runoff-slider', 'loss-slider']) {
+    const s = $(el); s.style.setProperty('--fill', `${((s.value - s.min) / (s.max - s.min)) * 100}%`);
   }
-  document.querySelectorAll('.preset:not(.demo-preset)').forEach(b=>{b.disabled=!manifest.banks.some(k=>Number(k.cert)===Number(b.dataset.cert));b.title=b.disabled?'FDIC data for this bank was not published by the workflow':'';});
-  await loadBank(999999);
+  for (const c of document.querySelectorAll('.preset-group .chip')) {
+    c.setAttribute('aria-pressed', String(Number(c.dataset.runoff) === runoff && Number(c.dataset.loss) === loss));
+  }
+  const l = state.report.latest, s = currentScenario();
+
+  // Liquidity
+  if (s.cash_after_outflow === null) {
+    $('liquidity-result').innerHTML = '<p class="empty">Cash or uninsured deposits were not reported for this quarter, so the liquidity scenario cannot be calculated.</p>';
+  } else {
+    const gap = s.cash_only_funding_gap > 0;
+    const cover = s.assumed_deposit_outflow > 0 ? (Number(l.cash) / s.assumed_deposit_outflow) * 100 : null;
+    const scale = Math.max(Number(l.cash), s.assumed_deposit_outflow);
+    $('liquidity-result').innerHTML = `
+      <div class="result-head">
+        <span class="result-figure ${gap ? 'negative' : ''}">${gap ? esc(fmtMoney(s.cash_only_funding_gap)) : esc(fmtMoney(s.cash_after_outflow))}</span>
+        <span class="result-caption">${gap ? 'cash-only gap: outflow exceeds cash on hand' : 'cash remaining after the outflow'}</span>
+      </div>
+      <div class="bars">${bar('Deposit outflow', s.assumed_deposit_outflow, scale, 'outflow')}${bar('Cash and balances', l.cash, scale, '')}</div>
+      <dl class="result-lines">
+        <div><dt>Uninsured domestic deposits</dt><dd>${esc(fmtMoney(l.uninsured_deposits))}</dd></div>
+        <div><dt>Cash covers outflow</dt><dd>${cover === null ? 'No outflow' : `${cover >= 999 ? '999%+' : `${cover.toFixed(0)}%`}`}</dd></div>
+        <div><dt>Cash after outflow</dt><dd>${esc(fmtMoney(s.cash_after_outflow))}</dd></div>
+      </dl>`;
+  }
+
+  // Capital
+  if (s.equity_assets_after_pct === null) {
+    $('capital-result').innerHTML = '<p class="empty">Equity, assets or loans were not reported for this quarter, so the capital scenario cannot be calculated.</p>';
+  } else {
+    const drop = s.equity_assets_before_pct - s.equity_assets_after_pct;
+    const scale = Math.max(Number(l.equity), 1);
+    $('capital-result').innerHTML = `
+      <div class="result-head">
+        <span class="result-figure ${s.equity_assets_after_pct < 0 ? 'negative' : ''}">${fmtPct(s.equity_assets_after_pct)}</span>
+        <span class="result-caption">equity / assets after the loss, down ${drop.toFixed(2)} pts from ${fmtPct(s.equity_assets_before_pct)}</span>
+      </div>
+      <div class="bars">${bar('Equity before', l.equity, scale, '')}${bar('Equity after', Math.max(0, s.equity_after_credit_loss), scale, 'after')}</div>
+      <dl class="result-lines">
+        <div><dt>Gross loans</dt><dd>${esc(fmtMoney(l.loans))}</dd></div>
+        <div><dt>Credit loss</dt><dd>${esc(fmtMoney(s.credit_loss))}</dd></div>
+        <div><dt>Loss as share of equity</dt><dd>${fmtPct(ratio(s.credit_loss, l.equity), 1)}</dd></div>
+      </dl>`;
+  }
+}
+for (const id of ['runoff-slider', 'loss-slider']) $(id).addEventListener('input', renderStress);
+for (const c of document.querySelectorAll('.preset-group .chip')) c.addEventListener('click', () => {
+  $('runoff-slider').value = c.dataset.runoff;
+  $('loss-slider').value = c.dataset.loss;
+  renderStress();
+});
+
+/* ---------- research ---------- */
+function renderBrief() {
+  const b = state.brief;
+  if (!b) { $('rules-report').innerHTML = '<p class="muted">No brief was published for this bank.</p>'; return; }
+  const flags = b.monitoring_flags.length
+    ? `<ul>${b.monitoring_flags.map((f) => `<li class="flag-item">${esc(f)}</li>`).join('')}</ul>`
+    : '<p>No screening thresholds were crossed among the fields reported this quarter.</p>';
+  $('rules-report').innerHTML = `
+    <p class="memo-meta">${esc(isDemo() ? 'Fictional data' : 'FDIC quarterly data')}, quarter ended ${esc(fmtDate(state.report.as_of))}</p>
+    <h3>Key figures</h3><ul>${b.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+    <h3>On watch</h3>${flags}
+    <h3>Interpretation</h3><p>${esc(b.interpretation)}</p>
+    <h3>Limitations</h3><p>${esc(b.limitations)}</p>`;
+}
+function setAI(status, html) {
+  const tag = $('ai-tag');
+  tag.textContent = status;
+  tag.classList.toggle('on', status === 'Published');
+  $('ai-answer').innerHTML = html;
+}
+async function renderAI(cert, request) {
+  state.aiText = '';
+  if (isDemo()) {
+    setAI('Not applicable', '<p class="muted">AI notes are generated only for real FDIC institutions. Choose JPMorgan Chase, Bank of America or Wells Fargo to see whether one has been published.</p>');
+    return;
+  }
+  setAI('Checking', '<p class="muted">Looking for a published AI note.</p>');
+  try {
+    const ai = await getJSON(`./data/ai_${Number(cert)}.json`);
+    if (request !== state.load) return;
+    if (ai.bank_as_of !== state.report.as_of || !ai.is_ai_generated) throw new Error('stale');
+    state.aiText = ai.answer;
+    setAI('Published', `<p class="memo-meta">Model ${esc(ai.model)}, generated ${esc(fmtBuildTime(ai.generated_at_utc) || ai.generated_at_utc)}</p><div class="ai-body"></div><p class="panel-foot">Model commentary can be wrong. Check every figure against the Overview tab before relying on it.</p>`);
+    $('ai-answer').querySelector('.ai-body').textContent = ai.answer;
+  } catch {
+    if (request !== state.load) return;
+    setAI('Not published', '<p class="muted">No AI note has been published for this bank yet. The evidence brief works without one. To publish notes, add an <code>AI_API_KEY</code> repository secret and run the Publish BankScope workflow.</p>');
+  }
+}
+
+/* ---------- load a bank ---------- */
+function showError(msg) { const e = $('error'); e.textContent = msg || ''; e.hidden = !msg; }
+async function loadBank(cert) {
+  if (!bankListed(cert)) { showError('That bank is not in the published dataset. Choose one from the Institution menu.'); return; }
+  const request = ++state.load;
+  showError('');
+  $('loading').hidden = false;
+  try {
+    const data = Number(cert) === DEMO_CERT && window.BANKSCOPE_DEMO ? window.BANKSCOPE_DEMO : await getJSON(`./data/bank_${Number(cert)}.json`);
+    if (request !== state.load) return;
+    if (!data?.report?.history?.length || !data.brief) throw new Error('the file is missing report or brief data');
+    state.report = data.report;
+    state.brief = data.brief;
+    $('bank-select').value = String(cert);
+
+    const demo = isDemo();
+    setText('bank-name', demo ? 'Northstar Regional Bank' : displayName(state.report.institution));
+    document.title = `${demo ? 'Northstar Regional Bank (fictional)' : displayName(state.report.institution)} · BankScope AI`;
+    setText('fact-cert', demo ? 'None (fictional)' : String(state.report.institution.cert));
+    setText('fact-period', fmtDate(state.report.as_of));
+    setText('fact-entity', demo ? 'Fictional bank' : 'Insured bank charter');
+    setText('fact-source', demo ? 'Invented figures' : 'FDIC BankFind');
+    const notice = $('notice');
+    notice.hidden = !demo;
+    notice.className = 'notice notice-demo';
+    notice.innerHTML = '<strong>Fictional data</strong><span>Northstar Regional Bank and its financial statements are invented for demonstration. No real institution is represented.</span>';
+
+    renderReadings(); renderChart(); renderChecks(); renderIndicators();
+    $('runoff-slider').value = 25; $('loss-slider').value = 2;
+    renderStress(); renderBrief();
+    writeHash();
+    await renderAI(cert, request);
+  } catch (e) {
+    if (request === state.load) showError(`Could not open this bank's data (${e.message}). Try another institution, or re-run the Publish BankScope workflow.`);
+  } finally {
+    if (request === state.load) $('loading').hidden = true;
+  }
+}
+let resizeTimer;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (state.report && state.view === 'overview') renderChart(); }, 150); });
+$('bank-select').addEventListener('change', (e) => loadBank(Number(e.target.value)));
+
+/* ---------- export ---------- */
+$('export-button').addEventListener('click', () => {
+  const r = state.report, b = state.brief;
+  if (!r || !b) return;
+  const s = currentScenario();
+  const lines = [
+    `# BankScope AI research brief: ${isDemo() ? 'Northstar Regional Bank (fictional)' : displayName(r.institution)}`, '',
+    isDemo() ? '**Fictional data. This is not a real bank.**' : `Source: FDIC BankFind quarterly financials, bank-charter level (FDIC certificate ${r.institution.cert}, legal name ${r.institution.name})`,
+    `Quarter ended: ${fmtDate(r.as_of)}`,
+    `Dataset built: ${fmtBuildTime(state.manifest.generated_at_utc) || 'unknown'}`,
+    '', '## Snapshot',
+    `- Total assets: ${fmtMoney(r.latest.assets)}`,
+    `- Total deposits: ${fmtMoney(r.latest.deposits)}`,
+    `- Equity / assets: ${fmtPct(r.metrics.equity_assets_pct)}`,
+    `- Total risk-based capital ratio: ${fmtPct(r.metrics.risk_based_capital_pct)}`,
+    `- Noncurrent loans: ${fmtPct(r.metrics.noncurrent_loans_pct)}`,
+    '', '## Evidence brief (rules-based)', ...b.points.map((p) => `- ${p}`),
+    '', '### On watch', ...(b.monitoring_flags.length ? b.monitoring_flags.map((f) => `- ${f}`) : ['- No screening thresholds crossed']),
+    '', b.interpretation,
+    '', '## Stress scenario (hypothetical)',
+    `- Uninsured deposit runoff: ${$('runoff-slider').value}% (outflow ${fmtMoney(s.assumed_deposit_outflow)})`,
+    `- Cash after outflow: ${fmtMoney(s.cash_after_outflow)}; cash-only gap: ${fmtMoney(s.cash_only_funding_gap)}`,
+    `- Credit loss on loans: ${Number($('loss-slider').value).toFixed(2)}% (${fmtMoney(s.credit_loss)})`,
+    `- Equity / assets: ${fmtPct(s.equity_assets_before_pct)} before, ${fmtPct(s.equity_assets_after_pct)} after`,
+    '- Excludes securities, borrowing capacity, foreign-office deposits, taxes, risk-weighted assets and management actions.',
+    ...(state.aiText ? ['', '## AI research note (model-generated; verify every figure)', state.aiText] : []),
+    '', '## Limitations', b.limitations,
+    '', '---', 'BankScope AI, FIN 414 class project at Bryant University. Not investment, legal or regulatory advice.',
+    'FDIC API documentation: https://api.fdic.gov/banks/docs',
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: `bankscope_${r.institution.cert}_${r.as_of}.md` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+/* ---------- start ---------- */
+function renderStatus() {
+  const m = state.manifest;
+  const live = m.banks.filter((b) => b.mode === 'live').length;
+  const built = fmtBuildTime(m.generated_at_utc);
+  $('status-dot').className = `status-dot ${live ? 'live' : 'demo'}`;
+  setText('status-text', live ? `FDIC data for ${live} ${live === 1 ? 'bank' : 'banks'}` : 'Demo data only');
+  setText('status-built', built ? `Built ${built}` : '');
+  setText('build-meta', `Last build: ${built || 'unknown'}. Data mode: ${m.build_mode === 'fdic_api' ? 'live FDIC API' : 'offline demo'}. AI notes: ${m.ai_enabled ? 'published' : 'not configured'}.`);
+  const sel = $('bank-select');
+  const liveBanks = m.banks.filter((b) => b.mode === 'live');
+  const demoBanks = m.banks.filter((b) => b.mode !== 'live');
+  sel.innerHTML =
+    (liveBanks.length ? `<optgroup label="FDIC-insured banks">${liveBanks.map((b) => `<option value="${Number(b.cert)}">${esc(displayName(b))}</option>`).join('')}</optgroup>` : '') +
+    `<optgroup label="Demonstration">${demoBanks.map((b) => `<option value="${Number(b.cert)}">Northstar Regional Bank (fictional)</option>`).join('')}</optgroup>`;
+}
+
+(async function init() {
+  try {
+    state.manifest = await getJSON('./data/manifest.json');
+    if (state.manifest.warnings?.length) showError(`${state.manifest.warnings.length} bank dataset(s) failed to download in the last build and are not shown. The others are unaffected.`);
+  } catch {
+    // Opened locally without data, or manifest missing: fall back to the clearly labeled demo.
+    state.manifest.generated_at_utc = null;
+  }
+  renderStatus();
+  const { bank, view } = readHash();
+  const firstLive = state.manifest.banks.find((b) => b.mode === 'live');
+  const start = bank && bankListed(bank) ? bank : firstLive ? Number(firstLive.cert) : DEMO_CERT;
+  if (view) state.view = view;
+  showView(state.view);
+  await loadBank(start);
 })();

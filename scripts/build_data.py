@@ -97,8 +97,11 @@ def build(offline=False):
         for cert, fallback_name in BANKS:
             try:
                 report = download_cert(cert)
+                # FDIC returns legal names in upper case; keep it and add a readable display name.
+                report['institution']['display_name'] = fallback_name
                 write_json(OUT / f'bank_{cert}.json', {'report': report, 'brief': baseline_memo(report)})
                 manifest['banks'].append({'cert': cert, 'name': report['institution']['name'],
+                                          'display_name': fallback_name,
                                           'mode': 'live', 'as_of': report['as_of']})
                 print(f'OK FDIC {cert}: {report["institution"]["name"]} @ {report["as_of"]}', flush=True)
             except Exception as exc:

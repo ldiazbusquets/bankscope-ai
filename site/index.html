@@ -1,75 +1,234 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#070c15" />
-  <meta name="description" content="BankScope AI — educational bank risk intelligence using public FDIC financial data." />
-  <title>BankScope AI | Institutional Banking Intelligence</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1422">
+  <meta name="description" content="BankScope AI: an educational bank risk research terminal built on public FDIC quarterly financial data.">
+  <title>BankScope AI · Bank risk research</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-mark"><span>BS</span><i></i></div><div><strong>BANKSCOPE<span> AI</span></strong><small>RESEARCH TERMINAL <b>V0.2</b></small></div></div>
-      <div class="side-label">WORKSPACE</div>
-      <nav id="side-nav" aria-label="Workspace">
-        <button data-tab="overview" class="nav-item active"><span class="nav-icon">◫</span> Overview <span class="nav-index">01</span></button>
-        <button data-tab="stress" class="nav-item"><span class="nav-icon">⌁</span> Stress lab <span class="nav-index">02</span></button>
-        <button data-tab="research" class="nav-item"><span class="nav-icon">✳</span> Research agent <span class="nav-index">03</span></button>
-        <button data-tab="method" class="nav-item"><span class="nav-icon">▤</span> Methodology <span class="nav-index">04</span></button>
-      </nav>
-      <div class="side-label side-label-later">DATA SOURCES</div>
-      <a class="source-link" href="https://api.fdic.gov/banks/docs" target="_blank" rel="noopener noreferrer"><span class="source-dot"></span> FDIC BankFind <span>↗</span></a>
-      <div class="side-bottom"><span class="status-light"></span><span>FIN 414 · CLASS PROJECT</span><p>Educational prototype · Not an FDIC product or official bank rating.</p></div>
-    </aside>
-    <div class="workspace">
-      <header class="topbar"><div class="breadcrumbs">RESEARCH / <span id="current-route">OVERVIEW</span></div><div class="top-right"><span id="api-state" class="top-status"><span class="pulse"></span> DATASET CHECK</span><span class="line"></span><span class="top-version">GITHUB PAGES EDITION</span></div></header>
-      <main class="content">
-        <div class="eyebrow"><span class="eyebrow-line"></span> INSTITUTIONAL INTELLIGENCE <span class="faint">/</span> BANK RISK ANALYSIS</div>
-        <section class="intro"><div><h1>See the risk.<br><em>Understand the bank.</em></h1><p>Independent bank financial intelligence. Verified data, transparent analytics, and research powered by AI.</p></div><div class="intro-deco" aria-hidden="true"><span>RISK / 01</span><div class="orb"><div class="orb-inner">B<span>●</span></div></div></div></section>
-        <section class="search-panel">
-          <div class="search-copy"><span class="tiny-heading">INSTITUTION LOOKUP</span><p>Search the banks published in this dataset. Data refreshes through GitHub Actions.</p></div>
-          <form id="search-form" class="search-row"><label for="bank-query" class="sr-only">Bank name or FDIC certificate</label><span class="search-icon">⌕</span><input id="bank-query" autocomplete="off" placeholder="Search published banks or enter a listed FDIC certificate…" /><button type="submit" class="primary-btn">Analyze bank <span>→</span></button></form>
-          <div id="search-results" class="results" hidden></div>
-          <div class="preset-row"><span>QUICK ACCESS</span><button type="button" class="preset" data-cert="628">JPMorgan Chase Bank</button><button type="button" class="preset" data-cert="3510">Bank of America</button><button type="button" class="preset" data-cert="3511">Wells Fargo Bank</button><button type="button" class="preset demo-preset" data-cert="999999">◈ Fictional demo</button></div>
-        </section>
-        <section class="bank-heading"><div><div class="bank-title-line"><span id="bank-name">Northstar Regional Bank</span> <span id="data-badge" class="data-badge demo">ILLUSTRATIVE</span></div><div class="bank-meta"><span id="cert-label">FDIC CERT · 999999 (FICTIONAL)</span><span>·</span><span id="period-label">REPORTING · 2026-06-30</span></div></div><button id="export-button" class="outline-btn" type="button">↓ Export brief</button></section>
-        <div id="notice" class="notice demo-notice"><strong>ILLUSTRATIVE DATA</strong><span>This demonstration uses a fabricated bank and fictional financial statements. No actual institution is represented.</span></div>
-        <div id="error" role="alert" class="notice error-notice" hidden></div>
-        <div id="loading" class="loading" hidden><div class="loader"></div><span>Retrieving financial statements and calculating indicators…</span></div>
-        <section id="view-overview" class="view active">
-          <div class="section-top"><div><span class="tiny-heading">01 / FINANCIAL SNAPSHOT</span><h2>Balance sheet at a glance</h2></div><span class="section-note">USD · VALUES AS REPORTED IN THOUSANDS, DISPLAYED AS BILLIONS</span></div>
-          <div class="kpi-grid">
-            <article class="kpi"><div class="kpi-label">TOTAL ASSETS <span>↗</span></div><div class="kpi-value" id="kpi-assets">—</div><div class="kpi-foot">Period-end balance</div></article>
-            <article class="kpi"><div class="kpi-label">TOTAL DEPOSITS <span>↗</span></div><div class="kpi-value" id="kpi-deposits">—</div><div class="kpi-foot">Funding base</div></article>
-            <article class="kpi"><div class="kpi-label">EQUITY / ASSETS <span>↗</span></div><div class="kpi-value" id="kpi-capital">—</div><div class="kpi-foot">Accounting capital proxy · not CET1</div></article>
-            <article class="kpi"><div class="kpi-label">NONCURRENT LOANS <span>↗</span></div><div class="kpi-value" id="kpi-npl">—</div><div class="kpi-foot">Reported credit quality measure</div></article>
-          </div>
-          <div class="twocol">
-            <article class="panel chart-panel"><div class="panel-heading"><div><div class="tiny-heading">BALANCE SHEET EVOLUTION</div><h3>Assets vs. deposits</h3></div><span class="soft-pill">LAST 8 QUARTERS</span></div><div class="legend"><span><b class="legend-line assets-line"></b> Total assets</span><span><b class="legend-line deposits-line"></b> Total deposits</span></div><div id="history-chart" class="history-chart" aria-label="Historical assets and deposits chart"></div><div class="chart-foot">SOURCE: <span id="chart-source">FABRICATED DEMO DATA</span></div></article>
-            <article class="panel monitor-panel"><div class="panel-heading"><div><div class="tiny-heading">AUTOMATED MONITORING</div><h3>Risk watchlist</h3></div><span id="watch-count" class="count-pill">—</span></div><p class="panel-explainer">Transparent screening thresholds, not supervisory assessments.</p><div id="signal-list" class="signal-list"></div><p class="tiny-caveat">Indicators are educational rules. They do not establish a bank's safety, legal compliance, or failure probability.</p></article>
-          </div>
-          <article class="panel ratio-panel"><div class="panel-heading"><div><div class="tiny-heading">INSTITUTION DIAGNOSTICS</div><h3>Financial condition indicators</h3></div><span class="soft-pill">FDIC DEFINITIONS + DERIVED RATIOS</span></div><div id="ratio-grid" class="ratio-grid"></div></article>
-        </section>
-        <section id="view-stress" class="view">
-          <div class="section-top"><div><span class="tiny-heading">02 / SCENARIO ENGINE</span><h2>Bank stress laboratory</h2></div><span class="section-note">USER-DEFINED HYPOTHETICAL SHOCKS</span></div>
-          <div class="stress-grid"><article class="panel stress-controls"><div class="panel-heading"><div><div class="tiny-heading">SCENARIO INPUTS</div><h3>Design a stress event</h3></div><span class="soft-pill">DETERMINISTIC</span></div><p class="panel-explainer">Change assumptions to understand a simplified balance-sheet response. Baseline reports are calculated in Python; these interactive scenarios use matching JavaScript formulas.</p>
-            <div class="slider-group"><div class="slider-top"><label for="runoff-slider">Uninsured deposit runoff</label><strong id="runoff-label">25%</strong></div><input type="range" min="0" max="75" step="1" value="25" id="runoff-slider"><div class="range-guide"><span>0%</span><span>75%</span></div><small>Percent of estimated uninsured domestic deposits withdrawn.</small></div>
-            <div class="slider-group"><div class="slider-top"><label for="loss-slider">Gross loan credit losses</label><strong id="loss-label">2.0%</strong></div><input type="range" min="0" max="10" step="0.25" value="2" id="loss-slider"><div class="range-guide"><span>0%</span><span>10%</span></div><small>Assumed immediate write-down of gross loans and equity.</small></div>
-            <div class="scenario-presets"><span class="tiny-heading">SAVED SCENARIOS</span><div><button data-runoff="10" data-loss="0.5">Mild</button><button data-runoff="25" data-loss="2" class="active">Moderate</button><button data-runoff="50" data-loss="6">Severe</button></div></div>
-          </article><article class="panel stress-output"><div class="panel-heading"><div><div class="tiny-heading">MODEL OUTPUT</div><h3>Estimated impact</h3></div><span id="scenario-status" class="soft-pill">HYPOTHETICAL</span></div><div id="stress-results" class="stress-results"></div><div class="model-note">Important: excludes securities liquidity, central bank funding, taxes, risk-weighted asset changes, and dynamic management actions. This is not a Federal Reserve supervisory stress test.</div></article></div>
-          <article class="panel assumptions"><div class="tiny-heading">HOW TO INTERPRET THE MODEL</div><div class="assumptions-grid"><div><b>01</b><strong>Liquidity</strong><p>Uninsured deposit runoff is compared with cash and balances alone. The resulting shortfall is a cash-only gap, not a definitive liquidity shortfall.</p></div><div><b>02</b><strong>Capital</strong><p>Illustrative credit losses reduce assets and equity equally. The model reports equity/assets, not regulatory CET1 or risk-based capital under stress.</p></div><div><b>03</b><strong>Interpretation</strong><p>Scenarios explore sensitivity under chosen assumptions. They cannot determine the probability of bank failure or predict a real bank run.</p></div></div></article>
-        </section>
-        <section id="view-research" class="view">
-          <div class="section-top"><div><span class="tiny-heading">03 / AUTOMATED RESEARCH</span><h2>Bank research agent</h2></div><span id="model-state" class="section-note">MODEL STATUS: CHECKING</span></div>
-          <div class="research-grid"><article class="panel research-panel"><div class="panel-heading"><div><div class="tiny-heading">DETERMINISTIC EVIDENCE BRIEF</div><h3>Verifiable baseline</h3></div><span class="soft-pill">NO LLM REQUIRED</span></div><div id="rules-report" class="rules-report"></div></article><article class="panel agent-panel"><div class="panel-heading"><div><div class="tiny-heading">LANGUAGE MODEL WORKFLOW</div><h3>AI research inquiry</h3></div><span class="soft-pill">OPTIONAL API</span></div><p class="panel-explainer">Optional LLM reports are generated in a GitHub Actions workflow with secrets. This static website cannot answer new questions instantly.</p><div class="model-note">To generate or refresh AI research: configure repository secrets, then run the <b>Publish BankScope</b> workflow from GitHub Actions.</div><div id="ai-answer" class="ai-answer" aria-live="polite"><span class="tiny-heading">AI OUTPUT</span><p>No AI report has been generated yet. The rules-based evidence brief is available without an API key.</p></div></article></div>
-        </section>
-        <section id="view-method" class="view"><div class="section-top"><div><span class="tiny-heading">04 / RESEARCH TRANSPARENCY</span><h2>Methods & data provenance</h2></div><span class="section-note">REPRODUCIBLE BY DESIGN</span></div><div class="method-grid"><article class="panel"><div class="tiny-heading">01 · DATA INGESTION</div><h3>FDIC BankFind API</h3><p>Search FDIC-insured bank charters, pull quarterly financial records by FDIC certificate, sort by reporting date, and preserve nulls for missing values. The Python workflow retrieves up to 12 quarters for each configured bank. The chart displays eight.</p><a class="method-link" href="https://api.fdic.gov/banks/docs" target="_blank" rel="noopener noreferrer">Official FDIC API documentation ↗</a></article><article class="panel"><div class="tiny-heading">02 · QUANTITATIVE ENGINE</div><h3>Calculated in Python</h3><p>Equity/assets, loans/deposits, cash/deposits, and uninsured domestic deposit share are computed deterministically. Published ratios are shown directly where available. Stress results are explicit accounting simplifications.</p><a class="method-link" href="https://banks.data.fdic.gov/bankfind-suite/financialreporting" target="_blank" rel="noopener noreferrer">Financial report reference ↗</a></article><article class="panel"><div class="tiny-heading">03 · AI LAYER</div><h3>Evidence-constrained commentary</h3><p>The AI endpoint receives an explicit snapshot, field definitions, flags, and stress assumptions. The GitHub Actions build can send structured financial evidence to a configured LLM through a private Actions secret, then publish an attributed AI report. The public site does not expose keys. Without a model, deterministic analysis works.</p></article><article class="panel"><div class="tiny-heading">04 · IMPORTANT LIMITATIONS</div><h3>Screening, not supervision</h3><p>Bank-level data must not be conflated with consolidated holding-company results. The thresholds are research heuristics, not legal capital criteria. Market risk, off-balance-sheet exposures, and management responses are not fully modeled.</p></article></div></section>
-        <footer class="footer"><span>© BANKSCOPE AI / FIN 414 ACADEMIC PROTOTYPE</span><span>INDEPENDENT RESEARCH TOOL · NOT AFFILIATED WITH THE FDIC</span></footer>
-      </main>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <a class="brand" href="./" aria-label="BankScope AI home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 22V12M13 22V9M18 22V14M23 22V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 24.5h20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span class="brand-name">BankScope <span>AI</span></span>
+      </a>
+      <div class="data-status" id="data-status" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Checking published dataset</span>
+        <span id="status-built" class="status-built"></span>
+      </div>
     </div>
-  </div>
-  <script src="./demo-data.js" defer></script><script src="./app.js" defer></script>
+  </header>
+
+  <main id="main" class="page">
+    <section class="institution" aria-labelledby="bank-name">
+      <div class="picker">
+        <label for="bank-select" class="picker-label">Institution</label>
+        <div class="select-wrap">
+          <select id="bank-select" aria-describedby="picker-help"></select>
+        </div>
+        <p id="picker-help" class="picker-help">Banks published by the latest GitHub Actions build.</p>
+      </div>
+
+      <div class="institution-head">
+        <div>
+          <h1 id="bank-name" class="bank-name">Loading institution</h1>
+          <dl class="bank-facts">
+            <div><dt>FDIC certificate</dt><dd id="fact-cert">—</dd></div>
+            <div><dt>Quarter ended</dt><dd id="fact-period">—</dd></div>
+            <div><dt>Entity</dt><dd id="fact-entity">Insured bank charter</dd></div>
+            <div><dt>Source</dt><dd id="fact-source">—</dd></div>
+          </dl>
+        </div>
+        <button id="export-button" class="button button-secondary" type="button">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 13h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download brief
+        </button>
+      </div>
+
+      <div id="notice" class="notice" role="note" hidden></div>
+      <div id="error" class="notice notice-error" role="alert" hidden></div>
+
+      <nav class="tabs" aria-label="Analysis views">
+        <div role="tablist" id="tablist">
+          <button role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true" data-view="overview">Overview</button>
+          <button role="tab" id="tab-stress" aria-controls="view-stress" aria-selected="false" tabindex="-1" data-view="stress">Stress test</button>
+          <button role="tab" id="tab-research" aria-controls="view-research" aria-selected="false" tabindex="-1" data-view="research">Research</button>
+          <button role="tab" id="tab-method" aria-controls="view-method" aria-selected="false" tabindex="-1" data-view="method">Methods</button>
+        </div>
+      </nav>
+    </section>
+
+    <div id="loading" class="loading" hidden><span class="spinner" aria-hidden="true"></span>Loading quarterly financials</div>
+
+    <!-- OVERVIEW -->
+    <section id="view-overview" class="view" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+      <div class="readings" id="readings" aria-label="Key readings"></div>
+
+      <div class="grid-2">
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Balance sheet trend</h2>
+              <p class="panel-sub">Total assets and total deposits, last eight reported quarters.</p>
+            </div>
+            <div class="legend" aria-hidden="true"><span><i class="swatch swatch-assets"></i>Assets</span><span><i class="swatch swatch-deposits"></i>Deposits</span></div>
+          </header>
+          <div id="history-chart" class="chart"></div>
+          <div class="table-scroll"><table id="yoy-table" class="yoy" aria-label="Latest quarter compared with the same quarter a year earlier"></table></div>
+          <p class="panel-foot" id="chart-foot">Axis starts at zero so quarter-to-quarter changes are shown at true scale.</p>
+        </article>
+
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Screening checks</h2>
+              <p class="panel-sub">Where each reading sits against an educational threshold.</p>
+            </div>
+            <span id="check-count" class="count"></span>
+          </header>
+          <div id="checks" class="checks"></div>
+          <p class="panel-foot">These are teaching heuristics chosen for this project, not regulatory minimums, supervisory ratings, or failure predictions.</p>
+        </article>
+      </div>
+
+      <article class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Financial condition indicators</h2>
+            <p class="panel-sub">Ratios reported by the FDIC are shown as published. Derived ratios are computed in Python from reported dollar amounts.</p>
+          </div>
+        </header>
+        <div id="indicator-table" class="indicator-groups"></div>
+      </article>
+    </section>
+
+    <!-- STRESS -->
+    <section id="view-stress" class="view" role="tabpanel" aria-labelledby="tab-stress" tabindex="0" hidden>
+      <div class="stress-layout">
+        <article class="panel controls">
+          <header class="panel-head"><div><h2>Scenario</h2><p class="panel-sub">An instantaneous, hypothetical shock to the latest reported balance sheet.</p></div></header>
+
+          <div class="preset-group" role="group" aria-label="Scenario presets">
+            <button type="button" class="chip" data-runoff="10" data-loss="0.5">Mild</button>
+            <button type="button" class="chip" data-runoff="25" data-loss="2">Moderate</button>
+            <button type="button" class="chip" data-runoff="50" data-loss="6">Severe</button>
+          </div>
+
+          <div class="slider">
+            <div class="slider-row"><label for="runoff-slider">Uninsured deposit runoff</label><output id="runoff-label" for="runoff-slider">25%</output></div>
+            <input type="range" id="runoff-slider" min="0" max="75" step="1" value="25">
+            <p class="hint">Share of estimated uninsured domestic deposits withdrawn.</p>
+          </div>
+
+          <div class="slider">
+            <div class="slider-row"><label for="loss-slider">Credit loss on loans</label><output id="loss-label" for="loss-slider">2.00%</output></div>
+            <input type="range" id="loss-slider" min="0" max="10" step="0.25" value="2">
+            <p class="hint">Immediate write-down of gross loans and leases, taken directly against equity.</p>
+          </div>
+        </article>
+
+        <div class="stress-results">
+          <article class="panel">
+            <header class="panel-head"><div><h2>Liquidity</h2><p class="panel-sub">Deposit outflow compared with cash and balances due from banks.</p></div></header>
+            <div id="liquidity-result"></div>
+          </article>
+          <article class="panel">
+            <header class="panel-head"><div><h2>Capital</h2><p class="panel-sub">Bank equity capital to total assets, before and after the credit loss.</p></div></header>
+            <div id="capital-result"></div>
+          </article>
+          <aside class="caveat">
+            <h3>What this model leaves out</h3>
+            <p>Securities that could be sold or pledged, Federal Home Loan Bank and Federal Reserve borrowing, foreign-office deposits, taxes, risk-weighted assets, and anything management would do in response. A cash-only gap is therefore a sensitivity measure, not a liquidity shortfall, and this is not a supervisory stress test.</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESEARCH -->
+    <section id="view-research" class="view" role="tabpanel" aria-labelledby="tab-research" tabindex="0" hidden>
+      <div class="research-layout">
+        <article class="panel memo">
+          <header class="panel-head">
+            <div><h2>Evidence brief</h2><p class="panel-sub">Generated by deterministic rules from the figures on the Overview tab. No language model involved.</p></div>
+            <span class="tag tag-rules">Rules-based</span>
+          </header>
+          <div id="rules-report"></div>
+        </article>
+
+        <article class="panel memo">
+          <header class="panel-head">
+            <div><h2>AI research note</h2><p class="panel-sub">Written by a language model in GitHub Actions from the same evidence, then published with the site.</p></div>
+            <span class="tag tag-ai" id="ai-tag">Not published</span>
+          </header>
+          <div id="ai-answer" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- METHOD -->
+    <section id="view-method" class="view" role="tabpanel" aria-labelledby="tab-method" tabindex="0" hidden>
+      <div class="grid-2">
+        <article class="panel prose">
+          <h2>How the data gets here</h2>
+          <ol class="pipeline">
+            <li><strong>Collect.</strong> A scheduled GitHub Actions job queries the FDIC BankFind <code>/financials</code> endpoint for up to twelve quarters per institution.</li>
+            <li><strong>Calculate.</strong> Python computes derived ratios, screening checks and the baseline stress case. Missing fields stay blank rather than being filled with zero.</li>
+            <li><strong>Publish.</strong> The results are written as JSON and deployed to GitHub Pages with the site. The browser recalculates only the interactive stress scenarios.</li>
+          </ol>
+          <p id="build-meta" class="panel-foot"></p>
+          <p><a class="link" href="https://api.fdic.gov/banks/docs" target="_blank" rel="noopener noreferrer">FDIC BankFind API documentation</a></p>
+        </article>
+
+        <article class="panel prose">
+          <h2>Reading the results</h2>
+          <p>Each figure belongs to an individual FDIC-insured bank charter. JPMorgan Chase Bank, N.A. is not the same reporting entity as JPMorgan Chase &amp; Co., its holding company.</p>
+          <p>Dollar amounts are reported to the FDIC in thousands and displayed here in millions, billions or trillions. Return on assets, return on equity and net interest margin are year-to-date figures annualized by the FDIC.</p>
+          <p>Equity / assets is an accounting measure. It is related to, but different from, the regulatory Tier 1 leverage and risk-based capital ratios.</p>
+        </article>
+      </div>
+
+      <article class="panel">
+        <header class="panel-head"><div><h2>Field definitions</h2><p class="panel-sub">Titles as listed in the FDIC BankFind data catalog.</p></div></header>
+        <div class="table-scroll">
+          <table class="fields">
+            <thead><tr><th scope="col">FDIC field</th><th scope="col">FDIC title</th><th scope="col">Used for</th></tr></thead>
+            <tbody>
+              <tr><td><code>ASSET</code></td><td>Total assets</td><td>Denominator for equity / assets; trend chart</td></tr>
+              <tr><td><code>DEP</code></td><td>Total deposits</td><td>Denominator for loans and cash ratios; trend chart</td></tr>
+              <tr><td><code>EQ</code></td><td>Equity capital</td><td>Numerator for equity / assets (matches the FDIC's own <code>EQV</code> ratio)</td></tr>
+              <tr><td><code>LNLSGR</code></td><td>Loans and leases, total</td><td>Loans / deposits; credit-loss scenario</td></tr>
+              <tr><td><code>CHBAL</code></td><td>Cash and due from depository institutions</td><td>Cash / deposits; liquidity scenario</td></tr>
+              <tr><td><code>DEPUNA</code></td><td>Estimated uninsured deposits in domestic offices</td><td>Uninsured share; runoff scenario</td></tr>
+              <tr><td><code>DEPDOM</code></td><td>Deposits held in domestic offices</td><td>Denominator for uninsured share</td></tr>
+              <tr><td><code>NCLNLSR</code></td><td>Noncurrent loans and leases / gross loans and leases</td><td>Asset quality, as reported</td></tr>
+              <tr><td><code>RBCRWAJ</code></td><td>Total risk-based capital ratio (PCA)</td><td>Regulatory capital, as reported</td></tr>
+              <tr><td><code>ROA</code></td><td>Return on assets</td><td>Earnings, as reported (annualized)</td></tr>
+              <tr><td><code>ROE</code></td><td>Return on equity</td><td>Earnings, as reported (annualized)</td></tr>
+              <tr><td><code>NIMY</code></td><td>Net interest margin</td><td>Earnings, as reported (annualized)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-foot-inner">
+      <p>BankScope AI is a FIN 414 class project at Bryant University. It is not affiliated with the FDIC and is not investment, legal or regulatory advice.</p>
+      <p><a class="link" href="https://github.com/ldiazbusquets/bankscope-ai" target="_blank" rel="noopener noreferrer">Source code on GitHub</a></p>
+    </div>
+  </footer>
+
+  <script src="./demo-data.js" defer></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
