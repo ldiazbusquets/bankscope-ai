@@ -35,6 +35,11 @@ jobs:
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
           AI_MODEL: ${{ vars.AI_MODEL }}
         run: python scripts/generate_ai.py
+      - name: Version asset links so browsers never mix old and new files
+        run: |
+          v="${GITHUB_SHA::7}"
+          sed -i "s#\./styles\.css\"#./styles.css?v=$v\"#; s#\./app\.js\"#./app.js?v=$v\"#; s#\./demo-data\.js\"#./demo-data.js?v=$v\"#" site/index.html
+          grep -c "?v=$v" site/index.html
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v4
         with:
