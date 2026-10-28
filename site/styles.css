@@ -193,7 +193,7 @@ html.lt .glass::before { background: radial-gradient(420px circle at var(--mx, -
 /* Institutions table */
 .table-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .table-head .panel-title { font: 300 clamp(24px, 2.4vw, 30px)/1.15 var(--sans); letter-spacing: -.03em; }
-.table-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.table-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: flex-end; flex: 1 1 auto; }
 .search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--s2); border: 1px solid var(--ln); min-width: min(280px, 100%); }
 .search:focus-within { border-color: var(--acc); }
 .search svg { width: 15px; height: 15px; color: var(--t3); flex: none; }
