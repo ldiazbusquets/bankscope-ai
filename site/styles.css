@@ -97,13 +97,9 @@ code { font: 400 .85em/1 var(--mono); color: var(--ink); background: var(--s3); 
 .i-moon { display: none; }
 html.lt .i-sun { display: none; }
 html.lt .i-moon { display: block; }
-.switch { display: flex; padding: 3px; border-radius: 999px; background: var(--s2); border: 1px solid var(--ln); }
-.switch a { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; color: var(--t2); white-space: nowrap; }
-.switch a:hover { color: var(--ink); }
-.switch a.on { background: var(--pill); color: var(--pill-ink); font-weight: 500; }
 
 .ticker { border-top: 1px solid var(--ln); overflow: hidden; height: 34px; font: 400 11.5px/34px var(--mono); color: var(--t2); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
-.ticker-track { display: inline-flex; gap: 34px; white-space: nowrap; padding-left: 34px; animation: tick 90s linear infinite; }
+.ticker-track { display: inline-flex; gap: 34px; white-space: nowrap; padding-left: 34px; animation: tick var(--tick-dur, 600s) linear infinite; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 .ticker .tk-name { color: var(--ink); }
 .ticker .tk-lbl { color: var(--t3); }
@@ -148,8 +144,8 @@ html.lt .glass::before { background: radial-gradient(420px circle at var(--mx, -
 .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--ln); }
 .hero-tiles { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 42%, transparent 75%), linear-gradient(0deg, var(--bg), transparent 30%); }
-.hero-inner { position: relative; z-index: 1; padding-top: clamp(64px, 10vw, 120px); padding-bottom: clamp(56px, 8vw, 96px); }
-.kicker { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--t2); margin-bottom: 26px; }
+.hero-inner { position: relative; z-index: 1; padding-top: clamp(36px, 5vw, 60px); padding-bottom: clamp(48px, 6vw, 80px); }
+.kicker { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--t2); margin-bottom: 18px; }
 .kicker .dash { width: 26px; height: 1px; background: var(--t3); }
 .hero-title { font: 300 clamp(42px, 7.2vw, 92px)/1.02 var(--sans); letter-spacing: -.045em; color: var(--ink); max-width: 13ch; }
 .hero-title .acc { color: var(--acc); }
@@ -430,12 +426,10 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .stress-layout { grid-template-columns: minmax(0, 1fr); }
   .controls { position: static; }
   .indicator-groups { columns: 1; }
-  .switch a:not(.on) { display: none; }
 }
 @media (max-width: 600px) {
   body { font-size: 14.5px; }
   .top-row { height: 58px; }
-  .switch { display: none; }
   .ticker { height: 30px; line-height: 30px; }
   html { scroll-padding-top: 100px; }
   .glass { padding: 20px 18px; border-radius: 18px; }

@@ -241,6 +241,11 @@ function renderTicker() {
     ...failedBanks().map((b) => `<span><span class="tk-fail">Failed ${esc(fmtDate(b.failed_on, { month: 'short', year: 'numeric' }))}</span> <span class="tk-name">${esc(short(b))}</span> <span class="tk-lbl">Uninsured</span> <span class="tk-dn">${esc(dash(b.summary?.uninsured_domestic_pct, 1))}</span></span>`),
   ].filter(Boolean).join('');
   $('ticker-track').innerHTML = items + items; // duplicated for a seamless loop
+  // Constant reading speed regardless of how many banks are listed (~30 px per second).
+  requestAnimationFrame(() => {
+    const half = $('ticker-track').scrollWidth / 2;
+    $('ticker-track').style.setProperty('--tick-dur', `${Math.max(60, Math.round(half / 30))}s`);
+  });
   $('ticker').hidden = !act.length;
 }
 
