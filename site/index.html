@@ -75,15 +75,15 @@
           <div class="map-grid">
             <div class="map-copy">
               <p class="label">Run-risk map</p>
-              <h2 id="map-title" class="panel-title">Who could cover a run on uninsured deposits?</h2>
-              <p class="body-copy">Each dot is one bank, sized by total assets. Further right means more deposits above the FDIC insurance limit; lower means less cash on hand to meet withdrawals. The shaded corner is where both are true.</p>
+              <h2 id="map-title" class="panel-title">Could it survive a run without selling at a loss?</h2>
+              <p class="body-copy">Each dot is one bank, sized by total assets. Lower means less cash and sellable (AFS) securities relative to the deposits most likely to run. Further right means bigger unrealized losses on held-to-maturity securities, losses that become real if the bank has to sell them. The shaded corner is where both are true.</p>
               <p class="body-copy callout" id="map-callout"></p>
               <div class="map-legend">
                 <span><i class="dot dot-active"></i>Operating bank, latest quarter</span>
                 <span><i class="dot dot-failed"></i>Failed bank, last report before failure</span>
               </div>
             </div>
-            <div class="map-chart" id="map-chart" role="figure" aria-label="Scatter chart of uninsured deposit share against cash to deposits"></div>
+            <div class="map-chart" id="map-chart" role="figure" aria-label="Scatter chart of unrealized held-to-maturity losses against liquid coverage"></div>
           </div>
           <div class="map-tip" id="map-tip" role="status" hidden></div>
         </section>
@@ -181,11 +181,11 @@
             </article>
             <article class="glass">
               <header class="panel-head">
-                <div><h2 class="panel-title">Screening checks</h2><p class="panel-sub">Where each reading sits against an educational threshold.</p></div>
+                <div><h2 class="panel-title">Screening checks</h2><p class="panel-sub">Where each reading sits against its threshold.</p></div>
                 <span id="check-count" class="count"></span>
               </header>
               <div id="checks" class="checks"></div>
-              <p class="foot-note">Teaching heuristics chosen for this project, not regulatory minimums, supervisory ratings or failure predictions.</p>
+              <p class="foot-note">Benchmarks are the Prompt Corrective Action well-capitalized minimums. Heuristics are teaching thresholds chosen for this project. Neither is a supervisory rating or a failure prediction.</p>
             </article>
           </div>
           <article class="glass">
@@ -199,27 +199,36 @@
             <article class="glass controls">
               <header class="panel-head"><div><h2 class="panel-title">Scenario</h2><p class="panel-sub">An instantaneous, hypothetical shock to the latest reported balance sheet.</p></div></header>
               <div class="seg seg-wide" role="group" aria-label="Scenario presets" id="presets">
-                <button type="button" data-runoff="10" data-loss="0.5">Mild</button>
-                <button type="button" data-runoff="25" data-loss="2">Moderate</button>
-                <button type="button" data-runoff="50" data-loss="6">Severe</button>
+                <button type="button" data-runoff="10" data-loss="0.5" data-haircut="2">Mild</button>
+                <button type="button" data-runoff="25" data-loss="2" data-haircut="5">Moderate</button>
+                <button type="button" data-runoff="50" data-loss="6" data-haircut="10">Severe</button>
               </div>
               <div class="slider">
-                <div class="slider-row"><label for="runoff-slider">Uninsured deposit runoff</label><output id="runoff-label" for="runoff-slider">25%</output></div>
+                <div class="slider-row"><label for="runoff-slider">Deposit runoff</label><output id="runoff-label" for="runoff-slider">25%</output></div>
                 <input type="range" id="runoff-slider" min="0" max="75" step="1" value="25">
-                <p class="hint">Share of estimated uninsured domestic deposits withdrawn.</p>
+                <p class="hint">Share of runnable deposits withdrawn at once.</p>
               </div>
               <div class="slider">
                 <div class="slider-row"><label for="loss-slider">Credit loss on loans</label><output id="loss-label" for="loss-slider">2.00%</output></div>
                 <input type="range" id="loss-slider" min="0" max="10" step="0.25" value="2">
                 <p class="hint">Immediate write-down of gross loans and leases, taken directly against equity.</p>
               </div>
+              <div class="slider">
+                <div class="slider-row"><label for="haircut-slider">Fire-sale haircut on securities</label><output id="haircut-label" for="haircut-slider">5%</output></div>
+                <input type="range" id="haircut-slider" min="0" max="20" step="1" value="5">
+                <p class="hint">Discount below fair value when securities are sold in a hurry.</p>
+              </div>
+              <div class="toggles">
+                <label class="toggle"><input type="checkbox" id="opt-foreign" checked><span>Include foreign-office deposits</span><small>None are FDIC-insured, so they can run too.</small></label>
+                <label class="toggle"><input type="checkbox" id="opt-htm" checked><span>Allow selling held-to-maturity securities</span><small>Selling them turns hidden losses into real ones.</small></label>
+              </div>
             </article>
             <div class="stress-results">
-              <article class="glass"><header class="panel-head"><div><h2 class="panel-title">Liquidity</h2><p class="panel-sub">Deposit outflow compared with cash and balances due from banks.</p></div></header><div id="liquidity-result"></div></article>
-              <article class="glass"><header class="panel-head"><div><h2 class="panel-title">Capital</h2><p class="panel-sub">Bank equity capital to total assets, before and after the credit loss.</p></div></header><div id="capital-result"></div></article>
+              <article class="glass"><header class="panel-head"><div><h2 class="panel-title">Liquidity</h2><p class="panel-sub">The bank pays withdrawals with cash first, then sells AFS securities, then HTM securities.</p></div></header><div id="liquidity-result"></div></article>
+              <article class="glass"><header class="panel-head"><div><h2 class="panel-title">Capital</h2><p class="panel-sub">Credit losses plus any losses realized by selling securities, against capital.</p></div></header><div id="capital-result"></div></article>
               <aside class="caveat">
                 <h3>What this model leaves out</h3>
-                <p>Securities that could be sold or pledged, Federal Home Loan Bank and Federal Reserve borrowing, foreign-office deposits, taxes, risk-weighted assets, and anything management would do in response. A cash-only gap is a sensitivity measure, not a liquidity shortfall, and this is not a supervisory stress test.</p>
+                <p>New borrowing from the Federal Home Loan Banks or the Federal Reserve (which would let a bank pledge securities instead of selling them), insured depositors leaving, taxes, changes in risk-weighted assets, and anything management would do in response. Regulatory ratios after the shock are approximations that assume unrealized AFS losses were excluded from capital. This is a sensitivity exercise, not a supervisory stress test.</p>
               </aside>
             </div>
           </div>
@@ -245,7 +254,7 @@
               <ol class="pipeline">
                 <li><strong>Rank.</strong> Each build asks the FDIC for the latest reporting quarter and ranks U.S.-chartered insured banks by total assets. The 50 largest are included, plus three banks that failed in 2023. U.S. branches of foreign banks are left out because they file no equity capital.</li>
                 <li><strong>Collect.</strong> For each bank, GitHub Actions downloads up to twelve quarters from the BankFind <code>/financials</code> endpoint, and names, locations and regulators from <code>/institutions</code>.</li>
-                <li><strong>Calculate.</strong> Python computes derived ratios, screening checks and the baseline stress case. Missing fields stay blank rather than being filled with zero.</li>
+                <li><strong>Calculate.</strong> Python computes derived ratios, screening checks and the baseline stress case. Missing fields stay blank rather than being filled with zero. The browser's interactive stress test runs the same formula, and an automated test checks that both give identical answers.</li>
                 <li><strong>Publish.</strong> Results are written as JSON and deployed to GitHub Pages. The browser recalculates only the interactive stress scenarios.</li>
               </ol>
               <p id="build-meta" class="foot-note"></p>
@@ -273,7 +282,13 @@
                   <tr><td><code>DEPUNA</code></td><td>Estimated uninsured deposits in domestic offices</td><td>Uninsured share; runoff scenario; run-risk map</td></tr>
                   <tr><td><code>DEPDOM</code></td><td>Deposits held in domestic offices</td><td>Denominator for uninsured share</td></tr>
                   <tr><td><code>NCLNLSR</code></td><td>Noncurrent loans and leases / gross loans and leases</td><td>Asset quality, as reported</td></tr>
-                  <tr><td><code>RBCRWAJ</code></td><td>Total risk-based capital ratio (PCA)</td><td>Regulatory capital, as reported</td></tr>
+                  <tr><td><code>RBCRWAJ</code></td><td>Total risk-based capital ratio (PCA)</td><td>Regulatory benchmark (10% well capitalized)</td></tr>
+                  <tr><td><code>DEPFOR</code></td><td>Total deposits in foreign offices</td><td>Runnable deposits (none are FDIC-insured)</td></tr>
+                  <tr><td><code>SCAF</code>, <code>SCAA</code></td><td>Available-for-sale securities at fair value and at amortized cost</td><td>Liquid assets; AFS unrealized loss</td></tr>
+                  <tr><td><code>SCHA</code>, <code>SCHF</code></td><td>Held-to-maturity securities at amortized cost and at fair value</td><td>Hidden HTM loss; securities sales in the stress test</td></tr>
+                  <tr><td><code>IDT1CER</code></td><td>Common equity tier 1 capital ratio</td><td>Regulatory benchmark (6.5% well capitalized)</td></tr>
+                  <tr><td><code>RBC1AAJ</code></td><td>Leverage ratio (PCA)</td><td>Regulatory benchmark (5% well capitalized)</td></tr>
+                  <tr><td><code>RWAJ</code>, <code>RBCT1J</code></td><td>Risk-weighted assets; Tier 1 capital</td><td>Approximate CET1 and leverage after the stress test</td></tr>
                   <tr><td><code>ROA</code>, <code>ROE</code>, <code>NIMY</code></td><td>Return on assets, return on equity, net interest margin</td><td>Earnings, as reported (annualized)</td></tr>
                   <tr><td><code>NAME</code>, <code>CITY</code>, <code>STALP</code>, <code>NAMEHCR</code>, <code>REGAGNT</code></td><td>Institution name, city, state, holding company, primary regulator</td><td>Labels and filters (institutions endpoint)</td></tr>
                 </tbody>
@@ -292,6 +307,7 @@
     </div>
   </footer>
 
+  <script src="./scenario.js" defer></script>
   <script src="./demo-data.js" defer></script>
   <script src="./app.js" defer></script>
 </body>

@@ -6,9 +6,12 @@ const $ = (id) => document.getElementById(id);
 const DEMO_CERT = 999999;
 const VIEWS = ['overview', 'stress', 'research', 'method'];
 // Same educational thresholds as bankcore/analytics.py WATCH_THRESHOLDS.
-const THRESHOLDS = {
-  equity_assets_pct: ['below', 8], uninsured_domestic_pct: ['above', 40], cash_deposits_pct: ['below', 10],
-  loans_deposits_pct: ['above', 95], noncurrent_loans_pct: ['above', 2],
+// Screening thresholds come from the build (manifest.thresholds, defined in bankcore/analytics.py).
+// This copy is only a fallback for local previews without a manifest.
+let THRESHOLDS = {
+  tier1_leverage_pct: ['below', 5, 'regulatory'], cet1_pct: ['below', 6.5, 'regulatory'], risk_based_capital_pct: ['below', 10, 'regulatory'],
+  liquid_coverage_pct: ['below', 35, 'heuristic'], htm_loss_equity_pct: ['above', 25, 'heuristic'],
+  noncurrent_loans_pct: ['above', 2, 'heuristic'], loans_deposits_pct: ['above', 95, 'heuristic'],
 };
 const REGULATORS = { OCC: 'OCC', FED: 'Federal Reserve', FDIC: 'FDIC', OTS: 'OTS' };
 
@@ -107,55 +110,58 @@ document.addEventListener('pointermove', (e) => {
   g.style.setProperty('--my', `${e.clientY - r.top}px`);
 }, { passive: true });
 
-/* ================= hero tiles ================= */
+/* ================= hero tiles =================
+   Same technique as the LDB Finance hero: a grid of small "windows", each fading on its own
+   seeded sine wave, drawn at about 24 frames a second. Seeding by grid position means a resize
+   redraws the same pattern instead of reshuffling it. Paused off screen and in hidden tabs. */
 const tiles = (() => {
-  const canvas = $('hero-tiles');
-  const ctx = canvas.getContext('2d');
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let cells = [], w = 0, h = 0, raf = 0, visible = true, last = 0;
-  const S = 14, GAP = 6;
+  const cv = $('hero-tiles'), ctx = cv.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SX = 16, SY = 15, TW = 10, TH = 6, t0 = performance.now();
+  let list = [], W = 0, H = 0, run = false, vis = true, last = 0;
+  const seed = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   function size() {
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    w = canvas.clientWidth; h = canvas.clientHeight;
-    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cells = [];
-    for (let y = 0; y < h; y += S + GAP) for (let x = 0; x < w; x += S + GAP) {
-      const r = Math.random();
-      cells.push({ x, y, a: r < 0.06 ? 0.55 + Math.random() * 0.35 : r < 0.3 ? 0.12 + Math.random() * 0.12 : 0.04, t: 0 });
+    list = [];
+    const cols = Math.ceil(W / SX) + 1, rows = Math.ceil(H / SY) + 1;
+    for (let y = 0, k = 0; y < rows; y++) for (let x = 0; x < cols; x++, k++) {
+      // Key the seed on (row, column) so tiles keep their rhythm when the width changes.
+      const id = y * 1000 + x, a = seed(id), b = seed(id + 9973), c = seed(id + 19997);
+      list.push({ x: x * SX + 3, y: y * SY + 4, base: 0.05 + a * 0.07, peak: c < 0.22 ? 0.55 + b * 0.4 : 0.14 + b * 0.12, sp: 0.05 + b * 0.16, ph: a * 6.283 });
     }
+    draw(performance.now());
   }
-  function draw() {
-    const css = getComputedStyle(document.documentElement);
-    const lit = css.getPropertyValue('--acc').trim() || '#74a9dd';
-    const base = css.getPropertyValue('--t3').trim() || '#7f8c9d';
-    ctx.clearRect(0, 0, w, h);
-    for (const c of cells) {
-      ctx.globalAlpha = c.a * (c.a > 0.5 ? 0.6 : 0.5);
-      ctx.fillStyle = c.a > 0.5 ? lit : base;
-      ctx.fillRect(c.x, c.y, S, S);
+  function draw(now) {
+    const lt = document.documentElement.classList.contains('lt'), t = (now - t0) / 1000;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = lt ? 'rgb(31,91,151)' : 'rgb(116,169,221)';
+    const k = lt ? 0.5 : 1;
+    for (const p of list) {
+      const s = still ? 0.5 : Math.max(0, Math.sin(t * p.sp * 6.283 + p.ph));
+      ctx.globalAlpha = (p.base + (p.peak - p.base) * s * s * s) * k;
+      ctx.fillRect(p.x, p.y, TW, TH);
     }
     ctx.globalAlpha = 1;
   }
-  function step(t) {
-    raf = requestAnimationFrame(step);
-    if (!visible || document.hidden || t - last < 120) return;
-    last = t;
-    for (let i = 0; i < 6; i++) {
-      const c = cells[(Math.random() * cells.length) | 0];
-      if (!c) continue;
-      const r = Math.random();
-      c.a = r < 0.3 ? 0.55 + Math.random() * 0.35 : r < 0.6 ? 0.12 + Math.random() * 0.12 : 0.04;
-    }
-    draw();
+  function loop(now) {
+    if (!run) return;
+    if (now - last > 41) { last = now; draw(now); }
+    requestAnimationFrame(loop);
+  }
+  function go() {
+    const want = vis && !document.hidden && !still && !$('home').hidden;
+    if (want && !run) { run = true; requestAnimationFrame(loop); } else if (!want) run = false;
   }
   function start() {
-    size(); draw();
-    if (!reduce) raf = requestAnimationFrame(step);
-    new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(canvas);
-    let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { size(); draw(); }, 200); });
+    size();
+    let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(size, 150); });
+    document.addEventListener('visibilitychange', go);
+    new IntersectionObserver((e) => { vis = e[0].isIntersecting; go(); }).observe(cv);
+    go();
   }
-  return { start, redraw: () => draw() };
+  return { start, redraw: () => draw(performance.now()), go, size };
 })();
 
 /* ================= routing ================= */
@@ -180,6 +186,7 @@ async function route() {
     const fromDetail = !$('detail').hidden;
     showRoute('home');
     document.title = 'BankScope AI · Bank risk research';
+    tiles.size(); tiles.go();
     setNav(r.anchor === 'institutions' ? 'institutions' : r.anchor === 'case-studies' ? 'cases' : 'dashboard');
     if (r.anchor && $(r.anchor)) $(r.anchor).scrollIntoView();
     else if (fromDetail && state.homeScroll !== null) scrollTo(0, state.homeScroll);
@@ -190,6 +197,7 @@ async function route() {
   const cert = r.bank && bankByCert(r.bank) ? r.bank : state.cert || (first ? Number(first.cert) : DEMO_CERT);
   const wasHome = !$('detail').hidden ? false : true;
   showRoute('detail');
+  tiles.go();
   setNav(r.view === 'method' ? 'method' : null);
   showView(r.view);
   if (wasHome) scrollTo(0, 0);
@@ -213,21 +221,25 @@ function latestQuarter() {
 function renderStats() {
   const act = activeBanks(), fail = failedBanks();
   const sum = (k) => act.reduce((t, b) => t + (isNum(b.summary?.[k]) ? Number(b.summary[k]) : 0), 0);
-  const corner = act.filter((b) => crosses('uninsured_domestic_pct', b.summary?.uninsured_domestic_pct) && crosses('cash_deposits_pct', b.summary?.cash_deposits_pct)).length;
+  const corner = act.filter(inCorner).length;
   const q = latestQuarter();
   const items = act.length ? [
     ['Institutions', String(realBanks().length), `${act.length} largest by assets, ${fail.length} failed`],
     ['Combined assets', fmtMoney(sum('assets')), `${act.length} operating banks`],
-    ['Combined deposits', fmtMoney(sum('deposits')), q ? `Quarter ended ${fmtDate(q)}` : ''],
-    ['Median equity / assets', dash(median(act.map((b) => b.summary?.equity_assets_pct))), 'Accounting capital'],
-    ['Median uninsured share', dash(median(act.map((b) => b.summary?.uninsured_domestic_pct)), 1), 'Of domestic deposits'],
-    ['Run-risk corner', `${corner} of ${act.length}`, `Uninsured > ${THRESHOLDS.uninsured_domestic_pct[1]}% and cash < ${THRESHOLDS.cash_deposits_pct[1]}%`],
+    ['Median CET1 ratio', dash(median(act.map((b) => b.summary?.cet1_pct)), 1), 'Well capitalized at 6.5%'],
+    ['Median liquid coverage', dash(median(act.map((b) => b.summary?.liquid_coverage_pct)), 0), 'Cash + AFS ÷ runnable deposits'],
+    ['Median hidden HTM loss', dash(median(act.map((b) => b.summary?.htm_loss_equity_pct)), 1), 'As a share of equity'],
+    ['Run-risk corner', `${corner} of ${act.length}`, 'Both liquidity screens crossed'],
   ] : [['Institutions', '0', 'No FDIC data in this build'], ['Demo bank', '1', 'Fictional data available']];
   $('stats').innerHTML = items.map(([l, v, n]) => `<div class="stat"><div class="stat-label">${esc(l)}</div><div class="stat-value">${esc(v)}</div><div class="stat-note">${esc(n)}</div></div>`).join('');
   const built = fmtBuildTime(state.manifest.generated_at_utc);
   setText('sys-note', act.length
     ? `FDIC quarterly data, ${q ? fmtQuarter(q, true) : 'latest quarter'}. Built ${built || 'recently'} by GitHub Actions.`
     : 'This build has no FDIC data. Only the fictional demo bank is available.');
+}
+/** Low liquid coverage AND large hidden HTM losses: the combination behind the 2023 runs. */
+function inCorner(b) {
+  return crosses('liquid_coverage_pct', b.summary?.liquid_coverage_pct) && crosses('htm_loss_equity_pct', b.summary?.htm_loss_equity_pct);
 }
 
 /* ================= home: ticker ================= */
@@ -237,8 +249,8 @@ function renderTicker() {
   const short = (b) => displayName(b).replace(/,? (N\.A\.|National Association)$/i, '');
   const items = [
     q ? `<span class="tk-asof">● As of ${esc(fmtQuarter(q, true))}</span>` : '',
-    ...act.map((b) => `<span><span class="tk-name">${esc(short(b))}</span> ${esc(fmtMoney(b.summary?.assets))} <span class="tk-lbl">E/A</span> <span class="${crosses('equity_assets_pct', b.summary?.equity_assets_pct) ? 'tk-dn' : 'tk-up'}">${esc(dash(b.summary?.equity_assets_pct))}</span></span>`),
-    ...failedBanks().map((b) => `<span><span class="tk-fail">Failed ${esc(fmtDate(b.failed_on, { month: 'short', year: 'numeric' }))}</span> <span class="tk-name">${esc(short(b))}</span> <span class="tk-lbl">Uninsured</span> <span class="tk-dn">${esc(dash(b.summary?.uninsured_domestic_pct, 1))}</span></span>`),
+    ...act.map((b) => `<span><span class="tk-name">${esc(short(b))}</span> ${esc(fmtMoney(b.summary?.assets))} <span class="tk-lbl">CET1</span> <span class="${crosses('cet1_pct', b.summary?.cet1_pct) ? 'tk-dn' : 'tk-up'}">${esc(dash(b.summary?.cet1_pct, 1))}</span></span>`),
+    ...failedBanks().map((b) => `<span><span class="tk-fail">Failed ${esc(fmtDate(b.failed_on, { month: 'short', year: 'numeric' }))}</span> <span class="tk-name">${esc(short(b))}</span> <span class="tk-lbl">Hidden HTM loss</span> <span class="tk-dn">${esc(dash(b.summary?.htm_loss_equity_pct, 0))} of equity</span></span>`),
   ].filter(Boolean).join('');
   $('ticker-track').innerHTML = items + items; // duplicated for a seamless loop
   // Constant reading speed regardless of how many banks are listed (~30 px per second).
@@ -251,59 +263,59 @@ function renderTicker() {
 
 /* ================= home: run-risk map ================= */
 function renderMap() {
-  const pts = realBanks().filter((b) => isNum(b.summary?.uninsured_domestic_pct) && isNum(b.summary?.cash_deposits_pct));
+  const X = 'htm_loss_equity_pct', Y = 'liquid_coverage_pct';
+  const pts = realBanks().filter((b) => isNum(b.summary?.[X]) && isNum(b.summary?.[Y]));
   const box = $('map-chart');
-  if (!pts.length) { box.innerHTML = '<p class="empty">No institutions with both uninsured deposit and cash data in this build.</p>'; return; }
-  const W = Math.max(320, Math.round(box.clientWidth || 760)), H = W < 520 ? 320 : 420;
-  const L = 50, R = 18, T = 14, B = 46, vw = W - L - R, vh = H - T - B;
-  const ymaxRaw = Math.max(20, ...pts.map((b) => Number(b.summary.cash_deposits_pct)));
-  const ymax = Math.min(100, Math.ceil(ymaxRaw / 10) * 10);
-  const x = (v) => L + (Math.min(100, Math.max(0, v)) / 100) * vw;
-  // Square-root scale: spreads the 0-15% range where most banks sit, keeps custody banks on the chart.
-  const y = (v) => T + (1 - Math.sqrt(Math.min(ymax, Math.max(0, v)) / ymax)) * vh;
+  if (!pts.length) { box.innerHTML = '<p class="empty">No institutions with both securities and liquidity data in this build.</p>'; return; }
+  const W = Math.max(320, Math.round(box.clientWidth || 760)), H = W < 520 ? 330 : 430;
+  const L = 52, R = 18, T = 14, B = 48, vw = W - L - R, vh = H - T - B;
+  const XMAX = 100, YMAX = 200;
+  // Square-root scales spread out the crowded low end; values past the edge are pinned to it.
+  const x = (v) => L + Math.sqrt(Math.min(XMAX, Math.max(0, v)) / XMAX) * vw;
+  const y = (v) => T + (1 - Math.sqrt(Math.min(YMAX, Math.max(0, v)) / YMAX)) * vh;
   const maxA = Math.max(...pts.map((b) => Number(b.summary.assets) || 0), 1);
   const rad = (b) => 3.5 + Math.sqrt((Number(b.summary.assets) || 0) / maxA) * (W < 520 ? 14 : 20);
-  const [ux, cy] = [THRESHOLDS.uninsured_domestic_pct[1], THRESHOLDS.cash_deposits_pct[1]];
-  let g = `<rect class="zone" x="${x(ux)}" y="${y(cy)}" width="${x(100) - x(ux)}" height="${y(0) - y(cy)}"/>`;
-  g += `<text class="zone-label" x="${x(100) - 6}" y="${y(0) - 9}" text-anchor="end">UNINSURED > ${ux}% · CASH < ${cy}%</text>`;
-  for (let v = 0; v <= 100; v += 20) g += `<line class="grid-line" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${T + vh}"/><text class="axis-text" x="${x(v)}" y="${T + vh + 18}" text-anchor="middle">${v}%</text>`;
-  for (const v of [0, 2.5, 5, 10, 20, 30, 40, 50, 70, 100].filter((t) => t <= ymax)) g += `<line class="grid-line" x1="${L}" x2="${L + vw}" y1="${y(v)}" y2="${y(v)}"/><text class="axis-text" x="${L - 10}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`;
-  g += `<text class="axis-title" x="${L + vw / 2}" y="${H - 6}" text-anchor="middle">Uninsured share of domestic deposits</text>`;
-  g += `<text class="axis-title" transform="translate(13 ${T + vh / 2}) rotate(-90)" text-anchor="middle">Cash / deposits (square-root scale)</text>`;
+  const [tx, ty] = [THRESHOLDS[X][1], THRESHOLDS[Y][1]];
+  let g = `<rect class="zone" x="${x(tx)}" y="${y(ty)}" width="${x(XMAX) - x(tx)}" height="${y(0) - y(ty)}"/>`;
+  g += `<text class="zone-label" x="${x(XMAX) - 6}" y="${y(0) - 9}" text-anchor="end">HTM LOSS > ${tx}% OF EQUITY · COVERAGE < ${ty}%</text>`;
+  for (const v of [0, 5, 10, 25, 50, 100]) g += `<line class="grid-line" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${T + vh}"/><text class="axis-text" x="${x(v)}" y="${T + vh + 18}" text-anchor="middle">${v}%</text>`;
+  for (const v of [0, 10, 25, 50, 100, 200]) g += `<line class="grid-line" x1="${L}" x2="${L + vw}" y1="${y(v)}" y2="${y(v)}"/><text class="axis-text" x="${L - 10}" y="${y(v) + 4}" text-anchor="end">${v === YMAX ? '200%+' : `${v}%`}</text>`;
+  g += `<text class="axis-title" x="${L + vw / 2}" y="${H - 6}" text-anchor="middle">Unrealized HTM securities loss as a share of equity</text>`;
+  g += `<text class="axis-title" transform="translate(13 ${T + vh / 2}) rotate(-90)" text-anchor="middle">Liquid coverage of runnable deposits</text>`;
   const order = [...pts].sort((a, b) => (Number(b.summary.assets) || 0) - (Number(a.summary.assets) || 0));
   const labeled = new Set([...failedBanks().map((b) => b.cert), ...(W < 520 ? [] : order.filter((b) => b.status !== 'failed').slice(0, 3).map((b) => b.cert))]);
+  const short = (b) => displayName(b).replace(/,? (N\.A\.|National Association)$/i, '');
   const placed = [];
   const placeLabel = (txt, cx, cyy, r) => {
     const wpx = txt.length * 6.4 + 4, right = cx + r + 6 + wpx > L + vw;
     const x0 = right ? cx - r - 6 - wpx : cx + r + 6;
     for (const dy of [0, -15, 15, -30, 30, -45, 45]) {
-      const box = { x0, x1: x0 + wpx, y0: cyy + dy - 9, y1: cyy + dy + 5 };
-      if (box.y0 < T || box.y1 > T + vh) continue;
-      if (!placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) { placed.push(box); return { x: right ? x0 + wpx : x0, y: cyy + dy + 4, anchor: right ? 'end' : 'start' }; }
+      const bx = { x0, x1: x0 + wpx, y0: cyy + dy - 9, y1: cyy + dy + 5 };
+      if (bx.y0 < T || bx.y1 > T + vh - 14) continue;
+      if (!placed.some((p) => bx.x0 < p.x1 && bx.x1 > p.x0 && bx.y0 < p.y1 && bx.y1 > p.y0)) { placed.push(bx); return { x: right ? x0 + wpx : x0, y: cyy + dy + 4, anchor: right ? 'end' : 'start' }; }
     }
     return null;
   };
-  const short = (b) => displayName(b).replace(/,? (N\.A\.|National Association)$/i, '');
   const labelSvg = [];
   g += order.map((b) => {
-    const s = b.summary, failed = b.status === 'failed', cx = x(s.uninsured_domestic_pct), cyy = y(s.cash_deposits_pct), r = rad(b);
-    const label = `${displayName(b)}: uninsured ${fmtPct(s.uninsured_domestic_pct, 1)}, cash to deposits ${fmtPct(s.cash_deposits_pct, 1)}${failed ? `, failed ${fmtDate(b.failed_on)}` : ''}`;
+    const s = b.summary, failed = b.status === 'failed', cx = x(s[X]), cyy = y(s[Y]), r = rad(b);
+    const label = `${displayName(b)}: hidden HTM loss ${fmtPct(s[X], 1)} of equity, liquid coverage ${fmtPct(s[Y], 0)}${failed ? `, failed ${fmtDate(b.failed_on)}` : ''}`;
     const pos = labeled.has(b.cert) ? placeLabel(short(b), cx, cyy, r) : null;
-    const text = pos ? `<text class="pt-label ${failed ? 'failed' : ''}" x="${pos.x.toFixed(1)}" y="${pos.y.toFixed(1)}" text-anchor="${pos.anchor}">${esc(short(b))}</text>` : '';
-    if (text) labelSvg.push(text);
-    return `<a class="pt ${failed ? 'failed' : ''}" href="#bank=${Number(b.cert)}&amp;view=overview" data-cert="${Number(b.cert)}" aria-label="${esc(label)}"><circle cx="${cx.toFixed(1)}" cy="${cyy.toFixed(1)}" r="${r.toFixed(1)}"/></a>`;
+    if (pos) labelSvg.push(`<text class="pt-label ${failed ? 'failed' : ''}" x="${pos.x.toFixed(1)}" y="${pos.y.toFixed(1)}" text-anchor="${pos.anchor}">${esc(short(b))}</text>`);
+    const pinned = Number(s[Y]) > YMAX || Number(s[X]) > XMAX;
+    return `<a class="pt ${failed ? 'failed' : ''}${pinned ? ' pinned' : ''}" href="#bank=${Number(b.cert)}&amp;view=overview" data-cert="${Number(b.cert)}" aria-label="${esc(label)}"><circle cx="${cx.toFixed(1)}" cy="${cyy.toFixed(1)}" r="${r.toFixed(1)}"/></a>`;
   }).join('') + labelSvg.join('');
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter chart of ${pts.length} banks: uninsured deposit share against cash to deposits">${g}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter chart of ${pts.length} banks: unrealized held-to-maturity loss against liquid coverage">${g}</svg>`;
 
   const tip = $('map-tip'), panel = box.closest('.map-panel');
   const show = (el) => {
     const b = bankByCert(el.dataset.cert); if (!b) return;
     const s = b.summary;
-    tip.innerHTML = `<strong>${esc(displayName(b))}</strong><dl><dt>${b.status === 'failed' ? `Failed ${esc(fmtDate(b.failed_on))}` : `#${b.asset_rank || '—'} by assets`}</dt><dd>${esc(fmtMoney(s.assets))}</dd><dt>Uninsured share</dt><dd>${esc(fmtPct(s.uninsured_domestic_pct, 1))}${Number(s.uninsured_domestic_pct) > 100 ? '*' : ''}</dd><dt>Cash / deposits</dt><dd>${esc(fmtPct(s.cash_deposits_pct, 1))}</dd><dt>Equity / assets</dt><dd>${esc(dash(s.equity_assets_pct))}</dd><dt>Reported</dt><dd>${esc(fmtDate(b.as_of))}</dd></dl>`;
+    tip.innerHTML = `<strong>${esc(displayName(b))}</strong><dl><dt>${b.status === 'failed' ? `Failed ${esc(fmtDate(b.failed_on))}` : `#${b.asset_rank || '—'} by assets`}</dt><dd>${esc(fmtMoney(s.assets))}</dd><dt>Liquid coverage</dt><dd>${esc(fmtPct(s[Y], 0))}</dd><dt>Hidden HTM loss</dt><dd>${esc(fmtPct(s[X], 1))} of equity</dd><dt>CET1 ratio</dt><dd>${esc(dash(s.cet1_pct, 1))}</dd><dt>Reported</dt><dd>${esc(fmtDate(b.as_of))}</dd></dl>`;
     tip.hidden = false;
     const pr = panel.getBoundingClientRect(), cr = el.getBoundingClientRect();
     let left = cr.right - pr.left + 10, top = cr.top - pr.top - 10;
-    if (left + 230 > pr.width) left = cr.left - pr.left - 240;
+    if (left + 240 > pr.width) left = cr.left - pr.left - 250;
     tip.style.left = `${Math.max(8, left)}px`; tip.style.top = `${Math.max(8, top)}px`;
   };
   for (const el of box.querySelectorAll('.pt')) {
@@ -313,11 +325,10 @@ function renderMap() {
     el.addEventListener('blur', () => { tip.hidden = true; });
   }
 
-  // Data-driven callout about SVB (or whichever failed bank sits furthest right).
-  const worst = failedBanks().filter((b) => isNum(b.summary?.uninsured_domestic_pct)).sort((a, b) => b.summary.uninsured_domestic_pct - a.summary.uninsured_domestic_pct)[0];
-  const inZone = activeBanks().filter((b) => crosses('uninsured_domestic_pct', b.summary?.uninsured_domestic_pct) && crosses('cash_deposits_pct', b.summary?.cash_deposits_pct)).length;
-  $('map-callout').textContent = worst
-    ? `${displayName(worst)}'s last report, for ${fmtDate(worst.as_of)}, showed ${fmtPct(worst.summary.uninsured_domestic_pct, 1)} of domestic deposits uninsured and cash equal to ${fmtPct(worst.summary.cash_deposits_pct, 1)} of deposits. It failed on ${fmtDate(worst.failed_on)}. ${inZone} of today's ${activeBanks().length} largest banks sit in the shaded corner.`
+  const svb = failedBanks().filter((b) => isNum(b.summary?.[X])).sort((a, b) => b.summary[X] - a.summary[X])[0];
+  const corner = activeBanks().filter(inCorner).length;
+  $('map-callout').textContent = svb
+    ? `${displayName(svb)}'s last report, for ${fmtDate(svb.as_of)}, showed unrecognized HTM losses equal to ${fmtPct(svb.summary[X], 0)} of its equity and liquid assets covering ${fmtPct(svb.summary[Y], 0)} of runnable deposits, while its CET1 ratio was ${dash(svb.summary.cet1_pct, 1)}. It failed on ${fmtDate(svb.failed_on)}. ${corner === 0 ? 'None' : corner} of today's ${activeBanks().length} largest banks ${corner === 1 ? 'sits' : 'sit'} in the shaded corner.`
     : '';
 }
 
@@ -325,12 +336,12 @@ function renderMap() {
 const COLS = [
   { key: 'rank', label: '#', get: (b) => b.asset_rank ?? null },
   { key: 'name', label: 'Institution', get: (b) => displayName(b) },
-  { key: 'assets', label: 'Total assets', get: (b) => b.summary?.assets, fmt: fmtMoney },
-  { key: 'equity_assets_pct', label: 'Equity / assets', get: (b) => b.summary?.equity_assets_pct },
-  { key: 'risk_based_capital_pct', label: 'Total RBC', get: (b) => b.summary?.risk_based_capital_pct },
+  { key: 'assets', label: 'Total assets', get: (b) => b.summary?.assets },
+  { key: 'cet1_pct', label: 'CET1', get: (b) => b.summary?.cet1_pct, d: 1 },
+  { key: 'tier1_leverage_pct', label: 'Leverage', get: (b) => b.summary?.tier1_leverage_pct, d: 1 },
   { key: 'uninsured_domestic_pct', label: 'Uninsured', get: (b) => b.summary?.uninsured_domestic_pct, d: 1 },
-  { key: 'cash_deposits_pct', label: 'Cash / dep.', get: (b) => b.summary?.cash_deposits_pct, d: 1 },
-  { key: 'loans_deposits_pct', label: 'Loans / dep.', get: (b) => b.summary?.loans_deposits_pct, d: 1 },
+  { key: 'liquid_coverage_pct', label: 'Liquid cov.', get: (b) => b.summary?.liquid_coverage_pct, d: 0 },
+  { key: 'htm_loss_equity_pct', label: 'HTM loss / eq.', get: (b) => b.summary?.htm_loss_equity_pct, d: 1 },
   { key: 'noncurrent_loans_pct', label: 'Noncurrent', get: (b) => b.summary?.noncurrent_loans_pct },
   { key: 'roa_pct', label: 'ROA', get: (b) => b.summary?.roa_pct },
   { key: 'watch_count', label: 'Checks', get: (b) => b.summary?.watch_count ?? null },
@@ -457,9 +468,9 @@ function renderReadings() {
   const items = [
     ['Total assets', fmtMoney(l.assets), deltaHTML(quarterChange('assets'))],
     ['Total deposits', fmtMoney(l.deposits), deltaHTML(quarterChange('deposits'))],
-    ['Equity / assets', fmtPct(m.equity_assets_pct), '<span class="reading-note">Accounting capital</span>'],
-    ['Total risk-based capital', fmtPct(m.risk_based_capital_pct), '<span class="reading-note">Regulatory, as reported</span>'],
-    ['Noncurrent loans', fmtPct(m.noncurrent_loans_pct), '<span class="reading-note">Share of gross loans</span>'],
+    ['CET1 ratio', fmtPct(m.cet1_pct), '<span class="reading-note">Regulatory, as reported</span>'],
+    ['Liquid coverage', fmtPct(m.liquid_coverage_pct, 0), '<span class="reading-note">Cash + AFS ÷ runnable deposits</span>'],
+    ['Hidden HTM loss', fmtMoney(m.htm_unrealized_loss), `<span class="reading-note">${isNum(m.htm_loss_equity_pct) ? `${fmtPct(m.htm_loss_equity_pct, 1)} of equity` : 'Not reported'}</span>`],
   ];
   $('readings').innerHTML = items.map(([label, val, note]) => `<div class="reading"><div class="reading-label">${esc(label)}</div><div class="reading-value">${esc(val)}</div><div>${note}</div></div>`).join('');
 }
@@ -510,91 +521,126 @@ function renderChart() {
   setText('chart-foot', isDemo() ? 'Fictional figures. Axis starts at zero so changes are shown at true scale.' : 'Source: FDIC BankFind quarterly financials. Axis starts at zero so changes are shown at true scale.');
 }
 const GAUGE = {
-  equity_assets_pct: { name: 'Equity / assets', max: 16, unit: 'floor' },
-  uninsured_domestic_pct: { name: 'Uninsured share of domestic deposits', max: 100, unit: 'ceiling' },
-  cash_deposits_pct: { name: 'Cash / deposits', max: 30, unit: 'floor' },
-  loans_deposits_pct: { name: 'Loans / deposits', max: 140, unit: 'ceiling' },
-  noncurrent_loans_pct: { name: 'Noncurrent loans', max: 5, unit: 'ceiling' },
+  tier1_leverage_pct: { name: 'Tier 1 leverage ratio', max: 15 },
+  cet1_pct: { name: 'CET1 capital ratio', max: 20 },
+  risk_based_capital_pct: { name: 'Total risk-based capital ratio', max: 25 },
+  liquid_coverage_pct: { name: 'Liquid coverage of runnable deposits', max: 150 },
+  htm_loss_equity_pct: { name: 'Hidden HTM loss as a share of equity', max: 100 },
+  noncurrent_loans_pct: { name: 'Noncurrent loans', max: 5 },
+  loans_deposits_pct: { name: 'Loans / deposits', max: 140 },
 };
+function checkHTML(s) {
+  const g = GAUGE[s.metric] || { name: s.label, max: Math.max(s.threshold * 2, s.value * 1.2) };
+  const max = Math.max(g.max, s.threshold * 1.1), shown = Math.min(s.value, max);
+  const pos = (v) => Math.min(100, Math.max(0, (v / max) * 100));
+  const below = (s.direction || THRESHOLDS[s.metric]?.[0]) === 'below', t = pos(s.threshold);
+  const margin = Math.abs(s.value - s.threshold).toFixed(s.threshold >= 20 ? 1 : 2);
+  const zone = below ? `<span class="gauge-zone left" style="width:${t}%"></span>` : `<span class="gauge-zone right" style="width:${100 - t}%"></span>`;
+  const rel = below ? `${margin} pts ${s.flag ? 'below' : 'above'} the ${s.threshold}% floor` : `${margin} pts ${s.flag ? 'above' : 'under'} the ${s.threshold}% ceiling`;
+  return `<div class="check ${s.flag ? 'watch' : ''}"><div class="check-top"><span class="check-name">${esc(g.name)}</span><span class="check-value">${fmtPct(s.value, s.value >= 100 ? 0 : 2)}${s.value > max ? '+' : ''}</span></div>
+    <div class="gauge" role="img" aria-label="${esc(g.name)} ${fmtPct(s.value)}; ${esc(rel)}">${zone}<span class="gauge-threshold" style="left:calc(${t}% - 1px)"></span><span class="gauge-mark" style="left:${pos(shown)}%"></span></div>
+    <div class="check-meta"><span>${esc(rel)}</span><span class="check-status">${s.flag ? 'Watch' : 'Within range'}</span></div></div>`;
+}
 function renderChecks() {
   const signals = state.report.signals || [], watch = signals.filter((s) => s.flag).length, count = $('check-count');
   count.textContent = signals.length ? `${watch} of ${signals.length} on watch` : 'No data';
   count.classList.toggle('has-watch', watch > 0);
   if (!signals.length) { $('checks').innerHTML = '<p class="empty">None of the screened fields were reported for this quarter.</p>'; return; }
-  $('checks').innerHTML = signals.map((s) => {
-    const g = GAUGE[s.metric] || { name: s.label, max: Math.max(s.threshold * 2, s.value * 1.2), unit: 'ceiling' };
-    const max = Math.max(g.max, s.value * 1.05, s.threshold * 1.1), pos = (v) => Math.min(100, Math.max(0, (v / max) * 100));
-    const below = g.unit === 'floor', t = pos(s.threshold), margin = Math.abs(s.value - s.threshold).toFixed(2);
-    const zone = below ? `<span class="gauge-zone left" style="width:${t}%"></span>` : `<span class="gauge-zone right" style="width:${100 - t}%"></span>`;
-    const rel = below ? `${margin} pts ${s.flag ? 'below' : 'above'} the ${s.threshold}% floor` : `${margin} pts ${s.flag ? 'above' : 'under'} the ${s.threshold}% ceiling`;
-    return `<div class="check ${s.flag ? 'watch' : ''}"><div class="check-top"><span class="check-name">${esc(g.name)}</span><span class="check-value">${fmtPct(s.value)}</span></div>
-      <div class="gauge" role="img" aria-label="${esc(g.name)} ${fmtPct(s.value)}; ${esc(rel)}">${zone}<span class="gauge-threshold" style="left:calc(${t}% - 1px)"></span><span class="gauge-mark" style="left:${pos(s.value)}%"></span></div>
-      <div class="check-meta"><span>${esc(rel)}</span><span class="check-status">${s.flag ? 'Watch' : 'Within range'}</span></div></div>`;
-  }).join('');
+  const kind = (s) => s.kind || THRESHOLDS[s.metric]?.[2] || 'heuristic';
+  const group = (k, title, note) => {
+    const list = signals.filter((s) => kind(s) === k);
+    return list.length ? `<div class="check-group"><p class="check-group-title">${esc(title)}<span>${esc(note)}</span></p>${list.map(checkHTML).join('')}</div>` : '';
+  };
+  $('checks').innerHTML = group('regulatory', 'Regulatory benchmarks', 'Well-capitalized minimums under Prompt Corrective Action')
+    + group('heuristic', 'Teaching heuristics', 'Thresholds chosen for this project');
 }
 const INDICATORS = [
-  ['Capital', [['risk_based_capital_pct', 'Total risk-based capital ratio', 'Prompt Corrective Action measure', 'reported'], ['equity_assets_pct', 'Equity / assets', 'Equity capital ÷ total assets', 'derived']]],
-  ['Liquidity and funding', [['cash_deposits_pct', 'Cash / deposits', 'Cash and due from banks ÷ total deposits', 'derived'], ['loans_deposits_pct', 'Loans / deposits', 'Gross loans and leases ÷ total deposits', 'derived'], ['uninsured_domestic_pct', 'Uninsured domestic deposits', 'Estimated uninsured ÷ domestic deposits', 'derived']]],
+  ['Capital', [
+    ['cet1_pct', 'CET1 capital ratio', 'Common equity tier 1 ÷ risk-weighted assets', 'reported'],
+    ['tier1_leverage_pct', 'Tier 1 leverage ratio', 'Tier 1 capital ÷ average total assets', 'reported'],
+    ['risk_based_capital_pct', 'Total risk-based capital ratio', 'Total capital ÷ risk-weighted assets', 'reported'],
+    ['equity_assets_pct', 'Equity / assets', 'Equity capital ÷ total assets (accounting)', 'derived'],
+  ]],
+  ['Liquidity and funding', [
+    ['liquid_coverage_pct', 'Liquid coverage', 'Cash + AFS securities ÷ uninsured domestic and foreign deposits', 'derived', 0],
+    ['uninsured_domestic_pct', 'Uninsured domestic deposits', 'Estimated uninsured ÷ domestic deposits', 'derived', 1],
+    ['cash_deposits_pct', 'Cash / deposits', 'Cash and due from banks ÷ total deposits', 'derived', 1],
+    ['loans_deposits_pct', 'Loans / deposits', 'Gross loans and leases ÷ total deposits', 'derived', 1],
+  ]],
+  ['Securities', [
+    ['htm_unrealized_loss', 'Unrealized HTM loss', 'Held-to-maturity amortized cost − fair value; not in equity', 'derived', 'money'],
+    ['htm_loss_equity_pct', 'HTM loss / equity', 'How much equity the hidden loss would absorb', 'derived', 1],
+    ['afs_unrealized_loss', 'Unrealized AFS loss', 'Available-for-sale cost − fair value; already in equity', 'derived', 'money'],
+  ]],
   ['Asset quality', [['noncurrent_loans_pct', 'Noncurrent loans', '90+ days past due or nonaccrual ÷ gross loans', 'reported']]],
-  ['Earnings', [['roa_pct', 'Return on assets', 'Annualized year-to-date net income ÷ average assets', 'reported'], ['roe_pct', 'Return on equity', 'Annualized year-to-date net income ÷ average equity', 'reported'], ['nim_pct', 'Net interest margin', 'Annualized year-to-date', 'reported']]],
+  ['Earnings', [
+    ['roa_pct', 'Return on assets', 'Annualized year-to-date net income ÷ average assets', 'reported'],
+    ['roe_pct', 'Return on equity', 'Annualized year-to-date net income ÷ average equity', 'reported'],
+    ['nim_pct', 'Net interest margin', 'Annualized year-to-date', 'reported'],
+  ]],
 ];
 function renderIndicators() {
   const m = state.report.metrics;
-  $('indicator-table').innerHTML = INDICATORS.map(([group, rows]) => `<section class="group"><h3>${esc(group)}</h3>${rows.map(([k, name, def, origin]) =>
-    `<div class="ind"><span class="ind-name">${esc(name)}</span><span class="ind-value">${fmtPct(m[k])}</span><span class="ind-def">${esc(def)}</span><span class="ind-origin ${origin}">${origin === 'derived' ? 'Derived' : 'FDIC reported'}</span></div>`).join('')}</section>`).join('');
+  const val = (k, d) => (d === 'money' ? fmtMoney(m[k]) : fmtPct(m[k], d ?? 2));
+  $('indicator-table').innerHTML = INDICATORS.map(([group, rows]) => `<section class="group"><h3>${esc(group)}</h3>${rows.map(([k, name, def, origin, d]) =>
+    `<div class="ind"><span class="ind-name">${esc(name)}</span><span class="ind-value">${esc(val(k, d))}</span><span class="ind-def">${esc(def)}</span><span class="ind-origin ${origin}">${origin === 'derived' ? 'Derived' : 'FDIC reported'}</span></div>`).join('')}</section>`).join('');
 }
 
-/* ================= detail: stress ================= */
+/* ================= detail: stress =================
+   The math lives in site/scenario.js (mirror of bankcore/analytics.py, checked by tests/test_parity.py). */
 const ratio = (a, b) => (isNum(a) && isNum(b) && Number(b) !== 0 ? (Number(a) / Number(b)) * 100 : null);
-/** Mirrors bankcore/analytics.py::stress_test exactly. Inputs in USD thousands. */
-function scenario(rec, runoff, lossPct) {
-  const n = (v) => (isNum(v) ? Number(v) : null);
-  const u = n(rec.uninsured_deposits), cash = n(rec.cash), loans = n(rec.loans), equity = n(rec.equity), assets = n(rec.assets);
-  const outflow = u === null ? null : (u * runoff) / 100;
-  const remaining = cash === null || outflow === null ? null : cash - outflow;
-  const credit = loans === null ? null : (loans * lossPct) / 100;
-  const newEquity = equity === null || credit === null ? null : equity - credit;
-  const newAssets = assets === null || credit === null ? null : assets - credit;
-  return {
-    assumed_deposit_outflow: outflow, cash_after_outflow: remaining,
-    cash_only_funding_gap: remaining === null ? null : Math.max(0, -remaining),
-    credit_loss: credit, equity_after_credit_loss: newEquity,
-    equity_assets_before_pct: ratio(equity, assets),
-    equity_assets_after_pct: newEquity === null || newAssets === null ? null : ratio(newEquity, newAssets),
-  };
-}
-const currentScenario = () => scenario(state.report.latest, Number($('runoff-slider').value), Number($('loss-slider').value));
+const scenarioOptions = () => ({
+  deposit_runoff_pct: Number($('runoff-slider').value), credit_loss_pct: Number($('loss-slider').value),
+  securities_haircut_pct: Number($('haircut-slider').value), include_foreign: $('opt-foreign').checked, allow_htm_sales: $('opt-htm').checked,
+});
+const currentScenario = () => window.BankScopeScenario.stressTest(state.report.latest, scenarioOptions());
 function bar(label, thousands, scale, cls) {
   const w = isNum(thousands) && scale > 0 ? Math.max(0, Math.min(100, (Number(thousands) / scale) * 100)) : 0;
   return `<div class="bar-row"><span class="bar-label">${esc(label)}</span><span class="bar-track"><span class="bar-fill ${cls}" style="width:${w}%"></span></span><span class="bar-value">${esc(fmtMoney(thousands))}</span></div>`;
 }
+function stack(parts, total) {
+  return `<div class="stack" role="img" aria-label="${esc(parts.map(([l, v]) => `${l} ${fmtMoney(v)}`).join(', '))}">${parts.map(([, v, cls]) =>
+    `<span class="stack-seg ${cls}" style="width:${total > 0 ? Math.max(0, (v / total) * 100) : 0}%"></span>`).join('')}</div>
+    <div class="stack-legend">${parts.filter(([, v]) => v > 0).map(([l, v, cls]) => `<span><i class="sw ${cls}"></i>${esc(l)} <b>${esc(fmtMoney(v))}</b></span>`).join('')}</div>`;
+}
 function renderStress() {
   if (!state.report) return;
-  const runoff = Number($('runoff-slider').value), loss = Number($('loss-slider').value);
-  setText('runoff-label', `${runoff}%`); setText('loss-label', `${loss.toFixed(2)}%`);
-  for (const id of ['runoff-slider', 'loss-slider']) { const s = $(id); s.style.setProperty('--fill', `${((s.value - s.min) / (s.max - s.min)) * 100}%`); }
-  for (const c of $('presets').querySelectorAll('button')) c.setAttribute('aria-pressed', String(Number(c.dataset.runoff) === runoff && Number(c.dataset.loss) === loss));
+  const o = scenarioOptions();
+  setText('runoff-label', `${o.deposit_runoff_pct}%`); setText('loss-label', `${o.credit_loss_pct.toFixed(2)}%`); setText('haircut-label', `${o.securities_haircut_pct}%`);
+  for (const id of ['runoff-slider', 'loss-slider', 'haircut-slider']) { const el = $(id); el.style.setProperty('--fill', `${((el.value - el.min) / (el.max - el.min)) * 100}%`); }
+  for (const c of $('presets').querySelectorAll('button')) c.setAttribute('aria-pressed', String(Number(c.dataset.runoff) === o.deposit_runoff_pct && Number(c.dataset.loss) === o.credit_loss_pct && Number(c.dataset.haircut) === o.securities_haircut_pct));
   const l = state.report.latest, s = currentScenario();
-  if (s.cash_after_outflow === null) {
+
+  if (s.funding_gap === null) {
     $('liquidity-result').innerHTML = '<p class="empty">Cash or uninsured deposits were not reported for this quarter, so the liquidity scenario cannot be calculated.</p>';
   } else {
-    const gap = s.cash_only_funding_gap > 0, cover = s.assumed_deposit_outflow > 0 ? (Number(l.cash) / s.assumed_deposit_outflow) * 100 : null;
-    const scale = Math.max(Number(l.cash), s.assumed_deposit_outflow);
-    $('liquidity-result').innerHTML = `<div class="result-head"><span class="result-figure ${gap ? 'negative' : ''}">${esc(fmtMoney(gap ? s.cash_only_funding_gap : s.cash_after_outflow))}</span><span class="result-caption">${gap ? 'cash-only gap: outflow exceeds cash on hand' : 'cash remaining after the outflow'}</span></div>
-      <div class="bars">${bar('Deposit outflow', s.assumed_deposit_outflow, scale, 'outflow')}${bar('Cash and balances', l.cash, scale, '')}</div>
-      <dl class="result-lines"><div><dt>Uninsured domestic deposits</dt><dd>${esc(fmtMoney(l.uninsured_deposits))}</dd></div><div><dt>Cash covers outflow</dt><dd>${cover === null ? 'No outflow' : cover >= 999 ? '999%+' : `${cover.toFixed(0)}%`}</dd></div><div><dt>Cash after outflow</dt><dd>${esc(fmtMoney(s.cash_after_outflow))}</dd></div></dl>`;
+    const gap = s.funding_gap > 0.5;
+    const parts = [['Cash', s.cash_used, 'seg-cash'], ['AFS sales', s.afs_proceeds, 'seg-afs'], ['HTM sales', s.htm_proceeds, 'seg-htm'], ['Unfunded', s.funding_gap, 'seg-gap']];
+    const sold = (s.afs_sold || 0) + (s.htm_sold || 0);
+    $('liquidity-result').innerHTML = `<div class="result-head"><span class="result-figure ${gap ? 'negative' : ''}">${esc(fmtMoney(gap ? s.funding_gap : s.assumed_deposit_outflow))}</span><span class="result-caption">${gap ? 'funding gap: the outflow exceeds everything the bank can sell under these settings' : `outflow met${sold > 0 ? ' by selling securities' : ' from cash'}`}</span></div>
+      <p class="mini-label">How the ${esc(fmtMoney(s.assumed_deposit_outflow))} outflow is paid</p>${stack(parts, s.assumed_deposit_outflow)}
+      <dl class="result-lines"><div><dt>Runnable deposits</dt><dd>${esc(fmtMoney(s.runnable_deposits))}</dd></div><div><dt>Securities sold</dt><dd>${esc(fmtMoney(sold))}</dd></div><div><dt>Cash alone covers</dt><dd>${s.assumed_deposit_outflow > 0 ? `${Math.min(999, (Number(l.cash) / s.assumed_deposit_outflow) * 100).toFixed(0)}%` : 'No outflow'}</dd></div></dl>`;
   }
-  if (s.equity_assets_after_pct === null) {
+
+  if (s.equity_after === null) {
     $('capital-result').innerHTML = '<p class="empty">Equity, assets or loans were not reported for this quarter, so the capital scenario cannot be calculated.</p>';
   } else {
-    const drop = s.equity_assets_before_pct - s.equity_assets_after_pct, scale = Math.max(Number(l.equity), 1);
-    $('capital-result').innerHTML = `<div class="result-head"><span class="result-figure ${s.equity_assets_after_pct < 0 ? 'negative' : ''}">${fmtPct(s.equity_assets_after_pct)}</span><span class="result-caption">equity / assets after the loss, down ${drop.toFixed(2)} pts from ${fmtPct(s.equity_assets_before_pct)}</span></div>
-      <div class="bars">${bar('Equity before', l.equity, scale, '')}${bar('Equity after', Math.max(0, s.equity_after_credit_loss), scale, 'after')}</div>
-      <dl class="result-lines"><div><dt>Gross loans</dt><dd>${esc(fmtMoney(l.loans))}</dd></div><div><dt>Credit loss</dt><dd>${esc(fmtMoney(s.credit_loss))}</dd></div><div><dt>Loss as share of equity</dt><dd>${fmtPct(ratio(s.credit_loss, l.equity), 1)}</dd></div></dl>`;
+    const secLoss = (s.haircut_loss || 0) + (s.realized_htm_loss || 0);
+    const headline = isNum(s.cet1_after_pct) ? ['cet1', s.cet1_after_pct, s.cet1_before_pct, 'CET1 ratio after the shock (approximate)']
+      : ['eq', s.equity_assets_after_pct, s.equity_assets_before_pct, 'equity / assets after the shock'];
+    const neg = headline[1] < (headline[0] === 'cet1' ? THRESHOLDS.cet1_pct[1] : 0);
+    const scale = Math.max(Number(l.equity), 1);
+    $('capital-result').innerHTML = `<div class="result-head"><span class="result-figure ${neg ? 'negative' : ''}">${fmtPct(headline[1])}</span><span class="result-caption">${headline[3]}, from ${fmtPct(headline[2])}${headline[0] === 'cet1' && neg ? `; below the ${THRESHOLDS.cet1_pct[1]}% well-capitalized minimum` : ''}</span></div>
+      <div class="bars">${bar('Equity before', l.equity, scale, '')}${bar('Equity after', Math.max(0, s.equity_after), scale, 'after')}</div>
+      <dl class="result-lines result-lines-4"><div><dt>Credit loss</dt><dd>${esc(fmtMoney(s.credit_loss))}</dd></div><div><dt>Securities losses realized</dt><dd>${esc(fmtMoney(secLoss))}</dd></div><div><dt>Tier 1 leverage after</dt><dd>${esc(dash(s.tier1_leverage_after_pct))}</dd></div><div><dt>Equity / assets after</dt><dd>${esc(dash(s.equity_assets_after_pct))}</dd></div></dl>
+      ${s.realized_htm_loss > 0 ? `<p class="foot-note">Selling ${esc(fmtMoney(s.htm_sold))} of held-to-maturity securities turned ${esc(fmtMoney(s.realized_htm_loss))} of previously hidden losses into real ones.</p>` : ''}`;
   }
 }
-for (const id of ['runoff-slider', 'loss-slider']) $(id).addEventListener('input', renderStress);
-for (const c of $('presets').querySelectorAll('button')) c.addEventListener('click', () => { $('runoff-slider').value = c.dataset.runoff; $('loss-slider').value = c.dataset.loss; renderStress(); });
+for (const id of ['runoff-slider', 'loss-slider', 'haircut-slider']) $(id).addEventListener('input', renderStress);
+for (const id of ['opt-foreign', 'opt-htm']) $(id).addEventListener('change', renderStress);
+for (const c of $('presets').querySelectorAll('button')) c.addEventListener('click', () => {
+  $('runoff-slider').value = c.dataset.runoff; $('loss-slider').value = c.dataset.loss; $('haircut-slider').value = c.dataset.haircut; renderStress();
+});
 
 /* ================= detail: research ================= */
 function renderBrief() {
@@ -668,7 +714,7 @@ async function loadBank(cert) {
     }
     notice.hidden = !(demo || failed || meta.status === 'inactive');
     renderReadings(); renderChart(); renderChecks(); renderIndicators();
-    $('runoff-slider').value = 25; $('loss-slider').value = 2;
+    $('runoff-slider').value = 25; $('loss-slider').value = 2; $('haircut-slider').value = 5; $('opt-foreign').checked = true; $('opt-htm').checked = true;
     renderStress(); renderBrief(); writeHash();
     await renderAI(cert, request);
   } catch (e) {
@@ -694,16 +740,17 @@ $('export-button').addEventListener('click', () => {
     `Dataset built: ${fmtBuildTime(state.manifest.generated_at_utc) || 'unknown'}`,
     '', '## Snapshot',
     `- Total assets: ${fmtMoney(r.latest.assets)}`, `- Total deposits: ${fmtMoney(r.latest.deposits)}`,
-    `- Equity / assets: ${fmtPct(r.metrics.equity_assets_pct)}`, `- Total risk-based capital ratio: ${fmtPct(r.metrics.risk_based_capital_pct)}`,
-    `- Uninsured share of domestic deposits: ${fmtPct(r.metrics.uninsured_domestic_pct)}`, `- Noncurrent loans: ${fmtPct(r.metrics.noncurrent_loans_pct)}`,
+    `- CET1 ratio: ${fmtPct(r.metrics.cet1_pct)}; Tier 1 leverage: ${fmtPct(r.metrics.tier1_leverage_pct)}; total risk-based capital: ${fmtPct(r.metrics.risk_based_capital_pct)}`,
+    `- Liquid coverage of runnable deposits: ${fmtPct(r.metrics.liquid_coverage_pct, 0)}; uninsured share of domestic deposits: ${fmtPct(r.metrics.uninsured_domestic_pct, 1)}`,
+    `- Unrealized HTM loss: ${fmtMoney(r.metrics.htm_unrealized_loss)} (${fmtPct(r.metrics.htm_loss_equity_pct, 1)} of equity); noncurrent loans: ${fmtPct(r.metrics.noncurrent_loans_pct)}`,
     '', '## Evidence brief (rules-based)', ...b.points.map((p) => `- ${p}`),
     '', '### On watch', ...(b.monitoring_flags.length ? b.monitoring_flags.map((f) => `- ${f}`) : ['- No screening thresholds crossed']),
     '', b.interpretation, '', '## Stress scenario (hypothetical)',
-    `- Uninsured deposit runoff: ${$('runoff-slider').value}% (outflow ${fmtMoney(s.assumed_deposit_outflow)})`,
-    `- Cash after outflow: ${fmtMoney(s.cash_after_outflow)}; cash-only gap: ${fmtMoney(s.cash_only_funding_gap)}`,
-    `- Credit loss on loans: ${Number($('loss-slider').value).toFixed(2)}% (${fmtMoney(s.credit_loss)})`,
-    `- Equity / assets: ${fmtPct(s.equity_assets_before_pct)} before, ${fmtPct(s.equity_assets_after_pct)} after`,
-    '- Excludes securities, borrowing capacity, foreign-office deposits, taxes, risk-weighted assets and management actions.',
+    `- Runoff: ${s.deposit_runoff_pct}% of ${s.include_foreign ? 'uninsured domestic and foreign-office' : 'uninsured domestic'} deposits (outflow ${fmtMoney(s.assumed_deposit_outflow)})`,
+    `- Paid from cash ${fmtMoney(s.cash_used)}, AFS sales ${fmtMoney(s.afs_proceeds)}, HTM sales ${fmtMoney(s.htm_proceeds)}${s.allow_htm_sales ? '' : ' (HTM sales not allowed)'}; funding gap ${fmtMoney(s.funding_gap)}`,
+    `- Securities haircut ${s.securities_haircut_pct}%; credit loss ${s.credit_loss_pct.toFixed(2)}% of loans (${fmtMoney(s.credit_loss)}); realized HTM loss ${fmtMoney(s.realized_htm_loss)}`,
+    `- CET1 ${fmtPct(s.cet1_before_pct)} before, ${fmtPct(s.cet1_after_pct)} after (approximate); equity / assets ${fmtPct(s.equity_assets_before_pct)} before, ${fmtPct(s.equity_assets_after_pct)} after`,
+    '- Assumes AOCI is excluded from regulatory capital; RWA held constant; no new borrowing, taxes or management actions.',
     ...(state.aiText ? ['', '## AI research note (model-generated; verify every figure)', state.aiText] : []),
     '', '## Limitations', b.limitations, '', '---',
     'BankScope AI, FIN 414 class project at Bryant University. Not investment, legal or regulatory advice.',
@@ -740,6 +787,9 @@ addEventListener('resize', () => {
     state.manifest = await getJSON('./data/manifest.json');
   } catch {
     state.manifest.generated_at_utc = null; // opened locally without data: demo only
+  }
+  if (Array.isArray(state.manifest.thresholds) && state.manifest.thresholds.length) {
+    THRESHOLDS = Object.fromEntries(state.manifest.thresholds.map((t) => [t.metric, [t.direction, t.value, t.kind]]));
   }
   if (state.manifest.warnings?.length) console.warn('BankScope build warnings:', state.manifest.warnings);
   renderSelect(); renderStats(); renderTicker(); renderMap(); renderTable(); renderCases();

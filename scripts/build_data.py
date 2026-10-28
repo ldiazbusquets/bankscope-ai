@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from bankcore.analytics import FIELDS, build_report, baseline_memo, parse_fdic_record  # noqa: E402
+from bankcore.analytics import FIELDS, WATCH_THRESHOLDS, build_report, baseline_memo, parse_fdic_record  # noqa: E402
 from bankcore.sample import DEMO_CERT, demo_records  # noqa: E402
 
 OUT = ROOT / 'site' / 'data'
@@ -48,8 +48,9 @@ INSTITUTION_FIELDS = ['CERT', 'NAME', 'CITY', 'STALP', 'NAMEHCR', 'REGAGNT', 'AC
 US_CHARTER_CLASSES = {'N', 'SM', 'NM', 'SB', 'SA', 'SI'}
 CANDIDATE_EXTRA = 25
 SUMMARY_KEYS = [
-    'equity_assets_pct', 'risk_based_capital_pct', 'uninsured_domestic_pct', 'cash_deposits_pct',
-    'loans_deposits_pct', 'noncurrent_loans_pct', 'roa_pct', 'roe_pct', 'nim_pct',
+    'equity_assets_pct', 'risk_based_capital_pct', 'cet1_pct', 'tier1_leverage_pct',
+    'uninsured_domestic_pct', 'cash_deposits_pct', 'liquid_coverage_pct', 'htm_loss_equity_pct',
+    'htm_unrealized_loss', 'loans_deposits_pct', 'noncurrent_loans_pct', 'roa_pct', 'roe_pct', 'nim_pct',
 ]
 USER_AGENT = 'BankScopeAI-FIN414-Educational-Research/0.3'
 
@@ -214,6 +215,9 @@ def build(offline=False):
                    'mode': 'demo', 'status': 'fictional', 'as_of': demo['as_of'], 'summary': summarize(demo)}],
         'warnings': [],
         'build_mode': 'offline_demo' if offline else 'fdic_api',
+        # One source of truth for screening thresholds, read by the browser.
+        'thresholds': [{'metric': k, 'direction': d, 'value': v, 'label': l, 'kind': kind}
+                       for k, d, v, l, kind in WATCH_THRESHOLDS],
         'ai_enabled': False,
     }
     if not offline:

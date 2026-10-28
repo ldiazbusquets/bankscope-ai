@@ -17,16 +17,27 @@ QUARTERS = [
 
 
 def demo_records():
+    """Securities and regulatory-capital fields are derived from the invented balances with fixed
+    proportions so the demo exercises every feature. They are as fictional as the rest."""
     output = []
     for (date, assets, deposits, equity, loans, cash, uninsured, dom_deposits,
          noncurrent, risk_cap, roa, roe, nim) in QUARTERS:
+        afs_fair = round(assets * 0.11)
+        htm_cost = round(assets * 0.09)
+        rwa = round(assets * 0.72)
+        cet1 = round(risk_cap - 2.3, 2)
         output.append({
             "date": date,
             "assets": assets, "deposits": deposits, "equity": equity,
             "loans": loans, "cash": cash, "uninsured_deposits": uninsured,
             "domestic_deposits": dom_deposits,
+            "foreign_deposits": deposits - dom_deposits,
+            "afs_fair": afs_fair, "afs_cost": round(afs_fair * 1.04),
+            "htm_cost": htm_cost, "htm_fair": round(htm_cost * 0.91),
             "noncurrent_loans_pct": noncurrent,
             "risk_based_capital_pct": risk_cap,
+            "cet1_pct": cet1, "tier1_leverage_pct": 8.6,
+            "rwa": rwa, "tier1_capital": round(rwa * (cet1 + 0.4) / 100),
             "roa_pct": roa, "roe_pct": roe, "nim_pct": nim,
         })
     return output
