@@ -371,7 +371,9 @@ function renderTable() {
       const over = c.key === 'uninsured_domestic_pct' && isNum(v) && Number(v) > 100;
       return `<td class="${crosses(c.key, v) ? 'v-warn' : ''}"${over ? ' title="The FDIC estimate exceeds domestic deposits; shown as filed"' : ''}>${esc(dash(v, c.d ?? 2))}${over ? '*' : ''}</td>`;
     }).join('');
-    const sub = failed ? `Failed ${fmtDate(b.failed_on)}, last report ${fmtDate(b.as_of)}` : [place(b), REGULATORS[b.regulator] || b.regulator].filter(Boolean).join(' · ');
+    const sub = failed ? `Failed ${fmtDate(b.failed_on)}, last report ${fmtDate(b.as_of)}`
+      : b.status === 'inactive' ? `${place(b) ? `${place(b)} · ` : ''}Charter inactive since ${fmtDate(b.inactive_since)}`
+      : [place(b), REGULATORS[b.regulator] || b.regulator].filter(Boolean).join(' · ');
     return `<tr tabindex="0" data-cert="${Number(b.cert)}"><td>${b.asset_rank ?? '—'}</td><td class="bank-cell"><strong>${esc(displayName(b))}${failed ? '<span class="badge badge-fail">Failed</span>' : ''}</strong><span>${esc(sub)}</span></td>${cells}</tr>`;
   }).join('') : `<tr class="empty-row"><td colspan="${COLS.length}">No institutions match "${esc(state.query)}".</td></tr>`;
   for (const tr of $('inst-body').querySelectorAll('tr[data-cert]')) {
@@ -652,11 +654,14 @@ async function loadBank(cert) {
     if (demo) {
       notice.className = 'notice notice-demo';
       notice.innerHTML = '<strong>Fictional data</strong><span>Northstar Regional Bank and its financial statements are invented for demonstration. No real institution is represented.</span>';
+    } else if (meta.status === 'inactive') {
+      notice.className = 'notice notice-demo';
+      notice.innerHTML = `<strong>Charter inactive</strong><span>The FDIC lists this charter as inactive since ${esc(fmtDate(meta.inactive_since))}. These figures are from its last report, for the quarter ended ${esc(fmtDate(state.report.as_of))}.</span>`;
     } else if (failed) {
       notice.className = 'notice notice-fail';
       notice.innerHTML = `<strong>Failed ${esc(fmtDate(meta.failed_on))}</strong><span>These figures are from the bank's last report to the FDIC, for the quarter ended ${esc(fmtDate(state.report.as_of))}. The stress test applies to that balance sheet.</span>`;
     }
-    notice.hidden = !(demo || failed);
+    notice.hidden = !(demo || failed || meta.status === 'inactive');
     renderReadings(); renderChart(); renderChecks(); renderIndicators();
     $('runoff-slider').value = 25; $('loss-slider').value = 2;
     renderStress(); renderBrief(); writeHash();

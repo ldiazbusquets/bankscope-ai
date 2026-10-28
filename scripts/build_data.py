@@ -233,7 +233,10 @@ def build(offline=False):
                 print('WARNING:', manifest['warnings'][-1], file=sys.stderr)
                 continue
             inactive_on = us_date(meta.get('ENDEFYMD')) if str(meta.get('ACTIVE')) == '0' else None
-            failed_on = b['case'][1] if b['case'] else inactive_on
+            failed_on = b['case'][1] if b['case'] else None
+            # A closed charter that is not a listed failure (for example after a merger) is
+            # marked inactive, never failed; the FDIC change code is not interpreted here.
+            inactive_since = inactive_on if not b['case'] else None
             inst = report['institution']
             inst.update({
                 'display_name': display_name(str(meta.get('NAME') or inst['name']).strip()),
@@ -243,12 +246,13 @@ def build(offline=False):
                 'regulator': meta.get('REGAGNT') or None,
                 'status': 'failed' if b['case'] else ('inactive' if inactive_on else 'active'),
                 'failed_on': failed_on,
+                'inactive_since': inactive_since,
                 'asset_rank': b['rank'],
             })
             write_json(OUT / f'bank_{cert}.json', {'report': report, 'brief': baseline_memo(report)})
             manifest['banks'].append({
                 'cert': cert, 'name': inst['name'], 'display_name': inst['display_name'], 'mode': 'live',
-                'status': inst['status'], 'failed_on': failed_on, 'asset_rank': b['rank'],
+                'status': inst['status'], 'failed_on': failed_on, 'inactive_since': inactive_since, 'asset_rank': b['rank'],
                 'city': inst['city'], 'state': inst['state'], 'holding_company': inst['holding_company'],
                 'regulator': inst['regulator'], 'as_of': report['as_of'], 'summary': summarize(report),
             })

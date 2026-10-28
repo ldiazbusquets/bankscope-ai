@@ -27,6 +27,7 @@ INSTITUTIONS = {
     14: {'CERT': 14, 'NAME': 'State Street Bank and Trust Company', 'CITY': 'Boston', 'STALP': 'MA',
          'NAMEHCR': 'STATE STREET CORP', 'REGAGNT': 'FED', 'ACTIVE': 1, 'ENDEFYMD': '12/31/9999', 'BKCLASS': 'SM'},
     777: {'CERT': 777, 'NAME': 'Broken  Download Bank', 'BKCLASS': 'NM', 'ACTIVE': 1},
+    888: {'CERT': 888, 'NAME': 'Merged Away Bank', 'CITY': 'Hartford', 'STALP': 'CT', 'BKCLASS': 'N', 'ACTIVE': 0, 'ENDEFYMD': '08/20/2026'},
     33692: {'CERT': 33692, 'NAME': 'STANDARD CHARTERED BANK, PLC', 'CITY': 'New York', 'STALP': 'NY', 'BKCLASS': 'NC', 'ACTIVE': 1},
     24735: {'CERT': 24735, 'NAME': 'Silicon Valley Bank', 'CITY': 'Santa Clara', 'STALP': 'CA',
             'NAMEHCR': 'SVB FINANCIAL GROUP', 'REGAGNT': 'FED', 'ACTIVE': 0, 'ENDEFYMD': '03/10/2023'},
@@ -47,7 +48,8 @@ def fake_fdic(endpoint, params, attempts=3):
         return {'data': [{'data': {'REPDTE': '20260630'}}]}
     if f.startswith('REPDTE:'):
         return {'data': [{'data': {'CERT': 628, 'ASSET': 4e9}}, {'data': {'CERT': 33692, 'ASSET': 5e8}},
-                         {'data': {'CERT': 14, 'ASSET': 4e8}}, {'data': {'CERT': 777, 'ASSET': 1e8}}]}
+                         {'data': {'CERT': 14, 'ASSET': 4e8}}, {'data': {'CERT': 888, 'ASSET': 2e8}},
+                         {'data': {'CERT': 777, 'ASSET': 1e8}}]}
     cert = int(f.split(':')[1])
     if cert == 777:
         raise RuntimeError('FDIC financials request failed (HTTPError: 500)')
@@ -113,6 +115,10 @@ class BuildDataTests(unittest.TestCase):
     def test_foreign_branch_excluded_and_ranks_close_up(self):
         self.assertNotIn(33692, self.banks)
         self.assertEqual(self.banks[14]['asset_rank'], 2)  # ranked second once the branch is removed
+
+    def test_closed_charter_is_inactive_not_failed(self):
+        b = self.banks[888]
+        self.assertEqual((b['status'], b['failed_on'], b['inactive_since']), ('inactive', None, '2026-08-20'))
 
     def test_us_date_and_display_name_helpers(self):
         self.assertEqual(bd.us_date('03/10/2023'), '2023-03-10')
