@@ -1,0 +1,16 @@
+{
+  "generated_at_utc": "2026-10-28T17:00:48+00:00",
+  "source": "FDIC BankFind /financials (quarterly), queried by GitHub Actions",
+  "demo_cert": 999999,
+  "banks": [
+    {
+      "cert": 999999,
+      "name": "Northstar Regional Bank (FICTIONAL)",
+      "mode": "demo",
+      "as_of": "2026-06-30"
+    }
+  ],
+  "warnings": [],
+  "build_mode": "offline_demo",
+  "ai_enabled": false
+}

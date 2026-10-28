@@ -1,0 +1,235 @@
+{
+  "report": {
+    "institution": {
+      "name": "Northstar Regional Bank (FICTIONAL)",
+      "cert": 999999
+    },
+    "data_mode": "demo",
+    "as_of": "2026-06-30",
+    "units": "USD thousands for balance sheet items; percentages for ratios",
+    "latest": {
+      "date": "2026-06-30",
+      "assets": 53500000,
+      "deposits": 45100000,
+      "equity": 5180000,
+      "loans": 35500000,
+      "cash": 6700000,
+      "uninsured_deposits": 14200000,
+      "domestic_deposits": 43800000,
+      "noncurrent_loans_pct": 2.18,
+      "risk_based_capital_pct": 12.8,
+      "roa_pct": 0.78,
+      "roe_pct": 8.12,
+      "nim_pct": 3.12
+    },
+    "history": [
+      {
+        "date": "2024-09-30",
+        "assets": 47800000,
+        "deposits": 40500000,
+        "equity": 4520000,
+        "loans": 31200000,
+        "cash": 6250000,
+        "uninsured_deposits": 12300000,
+        "domestic_deposits": 39300000,
+        "noncurrent_loans_pct": 1.35,
+        "risk_based_capital_pct": 13.2,
+        "roa_pct": 0.92,
+        "roe_pct": 9.55,
+        "nim_pct": 3.21
+      },
+      {
+        "date": "2024-12-31",
+        "assets": 48250000,
+        "deposits": 41000000,
+        "equity": 4600000,
+        "loans": 31650000,
+        "cash": 6310000,
+        "uninsured_deposits": 12450000,
+        "domestic_deposits": 39900000,
+        "noncurrent_loans_pct": 1.4,
+        "risk_based_capital_pct": 13.4,
+        "roa_pct": 0.95,
+        "roe_pct": 9.72,
+        "nim_pct": 3.24
+      },
+      {
+        "date": "2025-03-31",
+        "assets": 48900000,
+        "deposits": 41300000,
+        "equity": 4650000,
+        "loans": 31900000,
+        "cash": 6220000,
+        "uninsured_deposits": 12800000,
+        "domestic_deposits": 40000000,
+        "noncurrent_loans_pct": 1.51,
+        "risk_based_capital_pct": 13.5,
+        "roa_pct": 0.9,
+        "roe_pct": 9.38,
+        "nim_pct": 3.18
+      },
+      {
+        "date": "2025-06-30",
+        "assets": 49350000,
+        "deposits": 41900000,
+        "equity": 4780000,
+        "loans": 32600000,
+        "cash": 6400000,
+        "uninsured_deposits": 12900000,
+        "domestic_deposits": 40600000,
+        "noncurrent_loans_pct": 1.49,
+        "risk_based_capital_pct": 13.6,
+        "roa_pct": 0.96,
+        "roe_pct": 9.85,
+        "nim_pct": 3.3
+      },
+      {
+        "date": "2025-09-30",
+        "assets": 50600000,
+        "deposits": 42900000,
+        "equity": 4860000,
+        "loans": 33400000,
+        "cash": 6580000,
+        "uninsured_deposits": 13100000,
+        "domestic_deposits": 41700000,
+        "noncurrent_loans_pct": 1.68,
+        "risk_based_capital_pct": 13.3,
+        "roa_pct": 0.88,
+        "roe_pct": 9.15,
+        "nim_pct": 3.26
+      },
+      {
+        "date": "2025-12-31",
+        "assets": 51200000,
+        "deposits": 43500000,
+        "equity": 4930000,
+        "loans": 33800000,
+        "cash": 6460000,
+        "uninsured_deposits": 13300000,
+        "domestic_deposits": 42100000,
+        "noncurrent_loans_pct": 1.71,
+        "risk_based_capital_pct": 13.1,
+        "roa_pct": 0.82,
+        "roe_pct": 8.73,
+        "nim_pct": 3.2
+      },
+      {
+        "date": "2026-03-31",
+        "assets": 52300000,
+        "deposits": 44000000,
+        "equity": 5040000,
+        "loans": 34800000,
+        "cash": 6640000,
+        "uninsured_deposits": 13900000,
+        "domestic_deposits": 42900000,
+        "noncurrent_loans_pct": 1.88,
+        "risk_based_capital_pct": 12.9,
+        "roa_pct": 0.76,
+        "roe_pct": 8.23,
+        "nim_pct": 3.15
+      },
+      {
+        "date": "2026-06-30",
+        "assets": 53500000,
+        "deposits": 45100000,
+        "equity": 5180000,
+        "loans": 35500000,
+        "cash": 6700000,
+        "uninsured_deposits": 14200000,
+        "domestic_deposits": 43800000,
+        "noncurrent_loans_pct": 2.18,
+        "risk_based_capital_pct": 12.8,
+        "roa_pct": 0.78,
+        "roe_pct": 8.12,
+        "nim_pct": 3.12
+      }
+    ],
+    "metrics": {
+      "equity_assets_pct": 9.682242990654204,
+      "loans_deposits_pct": 78.7139689578714,
+      "cash_deposits_pct": 14.855875831485587,
+      "uninsured_domestic_pct": 32.42009132420091,
+      "noncurrent_loans_pct": 2.18,
+      "risk_based_capital_pct": 12.8,
+      "roa_pct": 0.78,
+      "roe_pct": 8.12,
+      "nim_pct": 3.12
+    },
+    "signals": [
+      {
+        "metric": "equity_assets_pct",
+        "label": "Equity / assets below 8%",
+        "value": 9.68,
+        "threshold": 8.0,
+        "flag": false
+      },
+      {
+        "metric": "uninsured_domestic_pct",
+        "label": "Uninsured share of domestic deposits above 40%",
+        "value": 32.42,
+        "threshold": 40.0,
+        "flag": false
+      },
+      {
+        "metric": "cash_deposits_pct",
+        "label": "Cash / deposits below 10%",
+        "value": 14.86,
+        "threshold": 10.0,
+        "flag": false
+      },
+      {
+        "metric": "loans_deposits_pct",
+        "label": "Loans / deposits above 95%",
+        "value": 78.71,
+        "threshold": 95.0,
+        "flag": false
+      },
+      {
+        "metric": "noncurrent_loans_pct",
+        "label": "Noncurrent loans above 2%",
+        "value": 2.18,
+        "threshold": 2.0,
+        "flag": true
+      }
+    ],
+    "monitor_count": 1,
+    "scenario": {
+      "deposit_runoff_pct": 25,
+      "credit_loss_pct": 2,
+      "assumed_deposit_outflow": 3550000.0,
+      "cash_after_outflow": 3150000.0,
+      "cash_only_funding_gap": 0,
+      "credit_loss": 710000.0,
+      "equity_after_credit_loss": 4470000.0,
+      "equity_assets_before_pct": 9.682242990654204,
+      "equity_assets_after_pct": 8.467512786512597,
+      "assumptions": [
+        "Deposit runoff affects estimated uninsured domestic deposits only.",
+        "Cash and balances are the only liquidity resource modeled; securities and borrowing capacity are excluded.",
+        "Credit losses are applied to gross loans immediately and reduce assets and equity dollar-for-dollar.",
+        "Does not model taxes, insured depositor behavior, risk-weighted assets, funding replacements, or second-order effects."
+      ]
+    },
+    "provenance": {
+      "provider": "Fabricated demo data",
+      "source_url": null,
+      "method": "Deterministic Python financial calculations; missing data displayed as unavailable"
+    }
+  },
+  "brief": {
+    "title": "Bank risk monitoring brief — Northstar Regional Bank (FICTIONAL)",
+    "subtitle": "As of 2026-06-30 | ILLUSTRATIVE / NOT REAL",
+    "points": [
+      "Equity / assets: 9.68%; reported total risk-based capital ratio: 12.80%.",
+      "Cash / deposits: 14.86%; estimated uninsured domestic deposits: 32.42% of domestic deposits.",
+      "Loans / deposits: 78.71%; noncurrent loans: 2.18%.",
+      "Profitability: ROA 0.78%, ROE 8.12%, net interest margin 3.12%."
+    ],
+    "monitoring_flags": [
+      "Noncurrent loans above 2%"
+    ],
+    "interpretation": "1 of 5 available educational monitoring thresholds were triggered. These flags are screening aids—not regulatory findings, credit ratings, or predictions of failure.",
+    "limitations": "Entity is an individual FDIC-insured bank charter, not necessarily its consolidated holding company. FDIC data are quarterly and may lag; validate against official filings.",
+    "generation": "rules-based"
+  }
+}
