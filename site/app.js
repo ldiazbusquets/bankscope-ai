@@ -781,7 +781,10 @@ addEventListener('resize', () => {
   }, 150);
 });
 
-/* ================= installable app ================= */
+/* ================= installable app =================
+   The button is always shown (except inside the installed app). Chrome and Edge only hand the
+   page a native install prompt after their own engagement checks, so when no prompt is
+   available the button explains the browser's own install steps instead. */
 (function app() {
   const btn = $('install-btn'), dlg = $('install-dialog');
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -789,21 +792,35 @@ addEventListener('resize', () => {
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* app still works online */ }); });
   }
-  // Chrome, Edge and Android: the browser offers a native install prompt.
-  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; if (!standalone) btn.hidden = false; });
+  btn.hidden = standalone;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; });
   addEventListener('appinstalled', () => { btn.hidden = true; deferred = null; });
-  // Safari has no prompt: show the button with instructions instead.
   const ua = navigator.userAgent;
   const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const safariMac = /Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua) && !ios;
-  if (!standalone && (ios || safariMac)) btn.hidden = false;
+  const android = /Android/.test(ua);
+  const edge = /Edg\//.test(ua);
+  const chrome = /Chrome\//.test(ua) && !edge;
+  const firefox = /Firefox\//.test(ua);
+  const safariMac = /Macintosh/.test(ua) && /Safari\//.test(ua) && !chrome && !edge && !ios;
+  function steps() {
+    if (ios) return ['Open this page in Safari.', 'Tap the Share button (the square with an arrow).', 'Scroll down and tap "Add to Home Screen", then "Add".'];
+    if (safariMac) return ['In the menu bar, open File.', 'Choose "Add to Dock…", then "Add".'];
+    if (android) return ['Tap the ⋮ menu in the top-right corner.', 'Tap "Add to Home screen" or "Install app", then "Install".'];
+    if (edge) return ['Click the ⋯ menu in the top-right corner.', 'Choose Apps, then "Install BankScope AI".'];
+    if (chrome) return ['Click the ⋮ menu in the top-right corner of Chrome.', 'Choose "Cast, save, and share", then "Install page…" (it may also read "Install BankScope AI…").', 'Click Install. BankScope opens in its own window and gets an icon in your apps.'];
+    if (firefox) return ['Firefox on computers cannot install web apps.', 'Open this page in Chrome, Edge or Safari to install it.'];
+    return ['Open your browser menu.', 'Choose "Install" or "Add to Home Screen".'];
+  }
   btn.addEventListener('click', async () => {
-    if (deferred) { deferred.prompt(); await deferred.userChoice.catch(() => null); deferred = null; btn.hidden = true; return; }
-    $('install-steps').textContent = ios
-      ? 'In Safari, tap the Share button, then choose "Add to Home Screen".'
-      : safariMac ? 'In Safari, open the File menu (or the Share button) and choose "Add to Dock".'
-      : 'Open your browser menu and choose "Install BankScope" or "Add to Home Screen".';
-    if (dlg.showModal) dlg.showModal();
+    if (deferred) {
+      deferred.prompt();
+      const choice = await deferred.userChoice.catch(() => null);
+      deferred = null;
+      if (choice?.outcome === 'accepted') btn.hidden = true;
+      return;
+    }
+    $('install-steps').innerHTML = `<ol>${steps().map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`;
+    if (dlg.showModal) dlg.showModal(); else alert(steps().join('\n'));
   });
   const sync = () => { $('offline-toast').hidden = navigator.onLine; };
   addEventListener('online', sync); addEventListener('offline', sync); sync();
