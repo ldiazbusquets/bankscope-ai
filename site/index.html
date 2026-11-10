@@ -19,6 +19,11 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="BankScope">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Manrope:wght@300;400;500;600;700&display=swap">
@@ -37,6 +42,10 @@
         <a href="#view=method" data-nav="method">Methods</a>
       </nav>
       <div class="top-right">
+        <button class="install-btn" id="install-btn" type="button" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Install app</span>
+        </button>
         <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch to dark theme">
           <svg class="i-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <svg class="i-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 12.6A6 6 0 0 1 7.4 4.5a6 6 0 1 0 8.1 8.1Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
@@ -306,6 +315,14 @@
       <p><a class="link" href="https://github.com/ldiazbusquets/bankscope-ai" target="_blank" rel="noopener noreferrer">Source code</a></p>
     </div>
   </footer>
+
+  <div class="toast" id="offline-toast" role="status" hidden>You're offline. Showing the data saved from the last build.</div>
+  <dialog class="install-dialog" id="install-dialog" aria-labelledby="install-title">
+    <h2 id="install-title">Install BankScope</h2>
+    <p id="install-steps"></p>
+    <p class="muted">Once installed, BankScope opens in its own window and every bank in the latest build can be viewed offline.</p>
+    <form method="dialog"><button class="pill pill-primary-solid" type="submit">Got it</button></form>
+  </dialog>
 
   <script src="./scenario.js" defer></script>
   <script src="./demo-data.js" defer></script>

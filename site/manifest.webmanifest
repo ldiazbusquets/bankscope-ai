@@ -1,0 +1,23 @@
+{
+  "name": "BankScope AI",
+  "short_name": "BankScope",
+  "description": "Bank risk research on public FDIC quarterly data for the largest U.S. banks and the 2023 failures.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#080c13",
+  "theme_color": "#080c13",
+  "categories": ["finance", "education"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Institutions", "url": "./#institutions" },
+    { "name": "Silicon Valley Bank case study", "url": "./#bank=24735&view=overview" }
+  ]
+}

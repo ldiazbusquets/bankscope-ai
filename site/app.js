@@ -305,7 +305,7 @@ function renderMap() {
     const pinned = Number(s[Y]) > YMAX || Number(s[X]) > XMAX;
     return `<a class="pt ${failed ? 'failed' : ''}${pinned ? ' pinned' : ''}" href="#bank=${Number(b.cert)}&amp;view=overview" data-cert="${Number(b.cert)}" aria-label="${esc(label)}"><circle cx="${cx.toFixed(1)}" cy="${cyy.toFixed(1)}" r="${r.toFixed(1)}"/></a>`;
   }).join('') + labelSvg.join('');
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter chart of ${pts.length} banks: unrealized held-to-maturity loss against liquid coverage">${g}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Scatter chart of ${pts.length} banks: unrealized held-to-maturity loss against liquid coverage">${g}</svg>`;
 
   const tip = $('map-tip'), panel = box.closest('.map-panel');
   const show = (el) => {
@@ -382,7 +382,7 @@ function renderTable() {
       if (c.key === 'assets') return `<td>${esc(fmtMoney(v))}</td>`;
       if (c.key === 'watch_count') {
         const n = s.checks || 0;
-        return `<td><span class="checks-cell" aria-label="${v ?? 0} of ${n} checks on watch">${Array.from({ length: n }, (_, i) => `<i class="${i < (v || 0) ? 'on' : ''}"></i>`).join('')}</span></td>`;
+        return `<td><span class="checks-cell" role="img" aria-label="${v ?? 0} of ${n} checks on watch">${Array.from({ length: n }, (_, i) => `<i class="${i < (v || 0) ? 'on' : ''}"></i>`).join('')}</span></td>`;
       }
       const over = c.key === 'uninsured_domestic_pct' && isNum(v) && Number(v) > 100;
       return `<td class="${crosses(c.key, v) ? 'v-warn' : ''}"${over ? ' title="The FDIC estimate exceeds domestic deposits; shown as filed"' : ''}>${esc(dash(v, c.d ?? 2))}${over ? '*' : ''}</td>`;
@@ -780,6 +780,34 @@ addEventListener('resize', () => {
     else if (state.report && state.view === 'overview') renderChart();
   }, 150);
 });
+
+/* ================= installable app ================= */
+(function app() {
+  const btn = $('install-btn'), dlg = $('install-dialog');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let deferred = null;
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* app still works online */ }); });
+  }
+  // Chrome, Edge and Android: the browser offers a native install prompt.
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; if (!standalone) btn.hidden = false; });
+  addEventListener('appinstalled', () => { btn.hidden = true; deferred = null; });
+  // Safari has no prompt: show the button with instructions instead.
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const safariMac = /Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua) && !ios;
+  if (!standalone && (ios || safariMac)) btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    if (deferred) { deferred.prompt(); await deferred.userChoice.catch(() => null); deferred = null; btn.hidden = true; return; }
+    $('install-steps').textContent = ios
+      ? 'In Safari, tap the Share button, then choose "Add to Home Screen".'
+      : safariMac ? 'In Safari, open the File menu (or the Share button) and choose "Add to Dock".'
+      : 'Open your browser menu and choose "Install BankScope" or "Add to Home Screen".';
+    if (dlg.showModal) dlg.showModal();
+  });
+  const sync = () => { $('offline-toast').hidden = navigator.onLine; };
+  addEventListener('online', sync); addEventListener('offline', sync); sync();
+})();
 
 (async function init() {
   tiles.start();
